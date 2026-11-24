@@ -1,0 +1,8 @@
+# Hooks locales antes de cada commit. Instalar una vez por clon:
+#   pip install -r backend/requirements-dev.txt && pre-commit install
+# El mismo escaneo corre en el CI (.github/workflows/secretos.yml) como respaldo.
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks          # bloquea el commit si detecta una clave o token

@@ -1,0 +1,230 @@
+name: CI
+
+# Las 5 capas que exige la protección de main: backend-tests, frontend, integracion, imagen y gitleaks
+# (este último en secretos.yml). Mientras una parte del monolito no exista, su job pasa con un aviso;
+# en cuanto llega el archivo que lo activa, la capa corre entera sin tocar este archivo.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# El token del CI solo lee el repo, aunque cambie el valor por defecto de GitHub.
+permissions:
+  contents: read
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Comprobar si existe el backend
+        id: check
+        working-directory: .
+        run: |
+          if [ -f backend/requirements-dev.txt ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Aún no hay backend/requirements-dev.txt; se omite la capa."
+          fi
+
+      - name: Set up Python
+        if: steps.check.outputs.exists == 'true'
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+
+      - name: Install dependencies
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Lint y formato
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Tipado
+        if: steps.check.outputs.exists == 'true'
+        run: mypy
+
+      - name: Auditar dependencias
+        # Falla con cualquier vulnerabilidad conocida. Ignorar una sin arreglo va en
+        # auditoria_ignorar.txt (una por línea: ID y motivo).
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          ignorar=$(grep -oE '^[A-Za-z0-9-]+' auditoria_ignorar.txt 2>/dev/null | sed 's/^/--ignore-vuln /' || true)
+          pip-audit --strict $ignorar
+
+      - name: Analisis estatico de seguridad
+        # bandit sobre app/ con la config de pyproject.toml; cualquier hallazgo falla.
+        if: steps.check.outputs.exists == 'true'
+        run: bandit -c pyproject.toml -r app
+
+      - name: Run tests
+        if: steps.check.outputs.exists == 'true'
+        # Unitarios con dobles de prueba: sin credenciales ni servicios reales.
+        run: pytest -ra
+
+  frontend:
+    # Que el frontend compile, pase su auditoría y sus pruebas. No usa claves.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Comprobar si existe el frontend
+        id: check
+        working-directory: .
+        run: |
+          if [ -f frontend/package-lock.json ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Aún no hay frontend/package-lock.json; se omite la capa."
+          fi
+
+      - name: Set up Node
+        if: steps.check.outputs.exists == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        if: steps.check.outputs.exists == 'true'
+        run: npm ci
+
+      - name: Auditar dependencias
+        if: steps.check.outputs.exists == 'true'
+        run: npm audit --audit-level=low
+
+      - name: Pruebas
+        if: steps.check.outputs.exists == 'true'
+        run: npm test
+
+      - name: Build
+        if: steps.check.outputs.exists == 'true'
+        run: npm run build
+
+  integracion:
+    # SQL contra un Postgres real y desechable (misma imagen que el docker-compose). Nunca contra la
+    # base de producción: las variables INTEGRACION_* apuntan a localhost.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16.11
+        env:
+          POSTGRES_USER: agentguard
+          POSTGRES_PASSWORD: agentguard-ci
+          POSTGRES_DB: agentguard
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U agentguard -d agentguard"
+          --health-interval 5s --health-retries 24
+    env:
+      INTEGRACION_DATABASE_URL: postgresql://agentguard:agentguard-ci@127.0.0.1:5432/agentguard
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Comprobar si hay pruebas de integración
+        id: check
+        working-directory: .
+        run: |
+          if [ -f backend/requirements-dev.txt ] && grep -rqs "pytest.mark.integracion" backend/tests; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Aún no hay pruebas marcadas integracion; se omite la capa."
+          fi
+
+      - name: Set up Python
+        if: steps.check.outputs.exists == 'true'
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+
+      - name: Install dependencies
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Tests de integración
+        if: steps.check.outputs.exists == 'true'
+        run: pytest -m integracion -ra
+
+  imagen:
+    # Que la imagen única del monolito (API + build de React) construya, no tenga vulnerabilidades
+    # con arreglo, arranque sin base ni claves reales y no lleve nada privado.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Comprobar si existe el Dockerfile
+        id: check
+        run: |
+          if [ -f Dockerfile ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Aún no hay Dockerfile en la raíz; se omite la capa."
+          fi
+
+      - name: Construir la imagen
+        if: steps.check.outputs.exists == 'true'
+        run: docker build -t agentguard .
+
+      - name: Vulnerabilidades de la imagen
+        # La primera pasada lista HIGH y CRITICAL sin fallar; la segunda falla solo con las que
+        # tienen arreglo publicado.
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          trivy() {
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.76.2 "$@"
+          }
+          trivy image --quiet --severity HIGH,CRITICAL --exit-code 0 agentguard
+          trivy image --quiet --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 agentguard
+
+      - name: Levantar sin base
+        # Abrir no conecta: con valores falsos la API arranca igual.
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          docker run -d --name app -p 8000:8000 \
+            -e DATABASE_URL=postgresql://prueba.invalid/ci agentguard
+
+      - name: Esperar el health
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          for intento in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/api/v1/health; then exit 0; fi
+            sleep 2
+          done
+          docker logs app
+          exit 1
+
+      - name: Comprobar el contenido
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          test "$(docker exec app id -u)" != "0"
+          docker exec app test ! -e /srv/.env
+          docker exec app test ! -e /srv/backend/tests
