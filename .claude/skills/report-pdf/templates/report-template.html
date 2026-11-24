@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>{{TITLE}}</title>
+<style>{{CSS}}</style>
+<style>
+  /* Texto de los márgenes de página: título del documento y pie. */
+  @page { @top-right { content: {{TITLE_CSS}}; } @bottom-left { content: {{FOOTER_CSS}}; } }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  {{CATEGORY}}
+  <h1 class="cover-title">{{TITLE}}</h1>
+  {{SUBTITLE}}
+  <table class="cover-meta">{{META}}</table>
+</section>
+
+<section class="summary">
+  <h2 class="summary-title">{{SUMMARY_TITLE}}</h2>
+  {{SUMMARY}}
+  {{TOC}}
+</section>
+
+<main class="body">
+{{BODY}}
+</main>
+
+</body>
+</html>

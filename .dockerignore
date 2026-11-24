@@ -1,0 +1,15 @@
+# Lista de permitidos: todo queda fuera salvo lo que la imagen necesita, así un archivo nuevo con
+# datos privados no entra por olvido. Nunca agregar .env ni backend/tests.
+*
+!backend/app
+!backend/db/postgres
+!backend/requirements.txt
+!frontend/src
+!frontend/public
+!frontend/index.html
+!frontend/package.json
+!frontend/package-lock.json
+!frontend/vite.config.*
+**/__pycache__
+**/*.pyc
+**/node_modules
