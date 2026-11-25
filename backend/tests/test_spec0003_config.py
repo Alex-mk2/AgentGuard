@@ -7,6 +7,7 @@ import pytest
 
 from app.secretos.broker import crear_broker
 from app.secretos.config import ConfiguracionBrokerInvalida, cargar_configuracion
+from tests.egresos_util import salida_prueba
 from tests.secretos_util import CONFIG, config, entorno, escribir
 
 
@@ -69,7 +70,7 @@ def test_spec0003_rf01_json_roto_y_archivo_inexistente(tmp_path: Path) -> None:
 
 
 def test_spec0003_rf01_invalida_apaga_el_modulo_sin_tumbar_la_app(tmp_path: Path) -> None:
-    broker = crear_broker(escribir(tmp_path, "{roto"), entorno())
+    broker = crear_broker(escribir(tmp_path, "{roto"), entorno(), salida_prueba())
     assert not broker.configurado
     assert broker.estado()["error"] is not None
 
@@ -77,12 +78,16 @@ def test_spec0003_rf01_invalida_apaga_el_modulo_sin_tumbar_la_app(tmp_path: Path
 def test_spec0003_e8_http_solo_local_y_con_permiso(tmp_path: Path) -> None:
     local = config(acciones=[accion(url="http://localhost:9000/consulta")], agentes=[])
     externo = config(acciones=[accion(url="http://eco.ejemplo/consulta")], agentes=[])
-    assert not crear_broker(escribir(tmp_path, local), entorno()).configurado
-    assert crear_broker(escribir(tmp_path, local), entorno(), http_local=True).configurado
-    assert not crear_broker(escribir(tmp_path, externo), entorno(), http_local=True).configurado
+    assert not crear_broker(escribir(tmp_path, local), entorno(), salida_prueba()).configurado
+    assert crear_broker(
+        escribir(tmp_path, local), entorno(), salida_prueba(), http_local=True
+    ).configurado
+    assert not crear_broker(
+        escribir(tmp_path, externo), entorno(), salida_prueba(), http_local=True
+    ).configurado
 
 
 def test_spec0003_rf01_sin_ruta_queda_apagado() -> None:
-    broker = crear_broker(None, entorno())
+    broker = crear_broker(None, entorno(), salida_prueba())
     assert not broker.configurado
     assert broker.estado()["configurado"] is False

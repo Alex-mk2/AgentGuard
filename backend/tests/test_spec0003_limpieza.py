@@ -6,7 +6,7 @@ from urllib.parse import quote
 
 import pytest
 
-from app.secretos.limpieza import REEMPLAZO, limpiar, limpiar_cabeceras, variantes
+from app.egresos.limpieza import REEMPLAZO, limpiar, limpiar_cabeceras, variantes
 from tests.secretos_util import SECRETO
 
 FORMAS = variantes(SECRETO)

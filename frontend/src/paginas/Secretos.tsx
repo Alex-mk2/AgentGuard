@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 
 import { obtener } from "../api/cliente.ts";
-import { cabeceraAdmin, interpretarEstado, resumen } from "../secretos.ts";
+import { cabeceraAdmin, estadoAccion, interpretarEstado, resumen } from "../secretos.ts";
 import type { EstadoBroker } from "../secretos.ts";
 
 /** Estado del Secret Broker (SPEC-0003 E11, E13). El token de administración vive solo en este
@@ -104,10 +104,8 @@ function VistaEstado({ estado }: { estado: EstadoBroker }) {
                     {accion.descripcion && <div className="evidencia">{accion.descripcion}</div>}
                   </td>
                   <td>{accion.host ?? "—"}</td>
-                  <td>
-                    <code>{accion.secreto}</code>
-                  </td>
-                  <td>{accion.disponible ? "Disponible" : "Sin secreto cargado"}</td>
+                  <td>{accion.secreto ? <code>{accion.secreto}</code> : "sin credencial"}</td>
+                  <td>{estadoAccion(accion)}</td>
                 </tr>
               ))}
             </tbody>

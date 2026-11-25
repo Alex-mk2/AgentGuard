@@ -1,12 +1,13 @@
-// Lógica pura de la pantalla del Secret Broker (SPEC-0003 E11, E13, E15), sin JSX ni DOM.
+// Lógica pura de la pantalla del Secret Broker (SPEC-0003 E11, E13, E15; SPEC-0004 E3), sin JSX ni DOM.
 
 import type { Respuesta } from "./api/cliente.ts";
 
 export interface AccionEstado {
   id: string;
   descripcion: string;
-  secreto: string;
+  secreto: string | null; // null: herramienta sellada sin credencial (SPEC-0004 E9)
   host: string | null;
+  bloqueada_por_egresos: boolean;
   disponible: boolean;
 }
 
@@ -14,6 +15,7 @@ export interface AgenteEstado {
   id: string;
   acciones: string[];
   max_por_minuto: number;
+  web: string[];
   token_cargado: boolean;
 }
 
@@ -72,4 +74,10 @@ export function resumen(estado: EstadoBroker): string {
   if (!estado.configurado) return "El Secret Broker no está configurado.";
   const disponibles = estado.acciones.filter((accion) => accion.disponible).length;
   return `${disponibles} de ${estado.acciones.length} acciones disponibles · ${estado.agentes.length} agentes`;
+}
+
+/** Estado de una acción para la tabla: el bloqueo de egresos manda sobre el secreto faltante. */
+export function estadoAccion(accion: AccionEstado): string {
+  if (accion.bloqueada_por_egresos) return "Bloqueada por egresos";
+  return accion.disponible ? "Disponible" : "Sin secreto cargado";
 }

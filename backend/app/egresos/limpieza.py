@@ -1,4 +1,4 @@
-"""Que el secreto no vuelva al agente por la respuesta (SPEC-0003 E2, RF-05).
+"""Que ningún secreto vuelva al agente por la respuesta (SPEC-0003 E2, RF-05; SPEC-0004 E13).
 
 Se limpia en bytes, antes de decodificar, para cubrir JSON, texto y binario por igual. Se buscan las
 formas en que una API suele reflejar un valor: en claro, en base64 (normal y URL), codificado para
@@ -7,7 +7,8 @@ URL y escapado como JSON. Limitación conocida: no cubre transformaciones como u
 
 import base64
 import json
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
+from typing import Any
 from urllib.parse import quote, quote_plus
 
 REEMPLAZO = b"[SECRETO]"
@@ -67,3 +68,19 @@ def limpiar_cabeceras(
         limpiado |= tocado
         salida[clave] = datos.decode("utf-8", "replace")
     return salida, limpiado
+
+
+def decodificar_cuerpo(cuerpo: bytes, cabeceras: Mapping[str, str]) -> dict[str, Any]:
+    """`{"cuerpo": JSON o texto}` o `{"cuerpo_base64": ...}` si es binario; `{}` si viene vacío."""
+    tipo = cabeceras.get("content-type", "")
+    if not cuerpo:
+        return {}
+    if "json" in tipo:
+        try:
+            return {"cuerpo": json.loads(cuerpo)}
+        except ValueError:
+            pass
+    try:
+        return {"cuerpo": cuerpo.decode("utf-8")}
+    except UnicodeDecodeError:
+        return {"cuerpo_base64": base64.b64encode(cuerpo).decode("ascii")}

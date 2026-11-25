@@ -27,8 +27,8 @@ export const MODULOS: readonly Modulo[] = [
     id: "egresos",
     nombre: "Sealed Tools y control de egresos",
     descripcion: "Herramientas acotadas y bloqueo de destinos fuera de la allowlist.",
-    estado: "pendiente",
-    ruta: null,
+    estado: "activo", // SPEC-0004
+    ruta: "/modulos/egresos",
   },
   {
     id: "inyeccion",

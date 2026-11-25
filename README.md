@@ -10,6 +10,7 @@ en contra de quien lo despliega.
 **Índice:** [El problema](#el-problema-la-tríada-letal) · [Módulos](#módulos) ·
 [Arquitectura](#arquitectura) · [Detector de la Tríada](#módulo-1-detector-de-la-tríada-letal) ·
 [Secret Broker](#módulo-2-secret-broker) ·
+[Control de egresos](#módulo-3-sealed-tools-y-control-de-egresos) ·
 [Puesta en marcha](#puesta-en-marcha) · [Calidad](#calidad-y-ci) · [Estructura](#estructura)
 
 ## El problema: la Tríada Letal
@@ -36,7 +37,7 @@ AgentGuard rompe la tríada en cada punto en vez de confiar en que el modelo se 
 |---|---|---|---|
 | 1 | **Detector de la Tríada Letal** | Revisa el manifiesto de herramientas de un agente y alerta si reúne las tres condiciones. | ✅ Disponible |
 | 2 | **Secret Broker** | Inyecta las credenciales al ejecutar la acción; el modelo nunca ve el secreto. | ✅ Disponible |
-| 3 | **Sealed Tools y control de egresos (DLP)** | Herramientas acotadas y bloqueo (403) de cualquier destino fuera de la allowlist. | Pendiente |
+| 3 | **Sealed Tools y control de egresos (DLP)** | Herramientas acotadas y bloqueo (403) de cualquier destino fuera de la allowlist. | ✅ Disponible |
 | 4 | **Contención de prompt injection** | Inspección en cada salto (sesión, memoria, agente a agente) y ejecución aislada. | Pendiente |
 | 5 | **Human-in-the-Loop Gate** | Aprobación explícita antes de toda acción irreversible. | Pendiente |
 
@@ -52,8 +53,8 @@ flowchart LR
 
     classDef listo fill:#1a7f37,color:#fff,stroke:#1a7f37
     classDef pendiente stroke-dasharray: 4 3
-    class M1,M2 listo
-    class M3,M4,M5 pendiente
+    class M1,M2,M3 listo
+    class M4,M5 pendiente
 ```
 
 ## Arquitectura
@@ -76,12 +77,14 @@ flowchart LR
             S["salud y versión"]
             T["triada · módulo 1"]
             B["secretos · módulo 2"]
-            F["módulos 3 a 5"]
+            E["egresos · módulo 3<br/>única salida de red"]
+            F["módulos 4 y 5"]
         end
     end
 
     S -.->|"readiness · 2 s"| DB[("PostgreSQL 16")]
-    B -->|"secreto inyectado · solo el host declarado"| X["APIs externas"]
+    B --> E
+    E -->|"allowlist · DLP · solo IP públicas"| X["APIs externas y web"]
 
     classDef pendiente stroke-dasharray: 4 3
     class F pendiente
@@ -95,6 +98,9 @@ flowchart LR
 | `POST /api/v1/triada/analisis` | Reporte del Detector de la Tríada Letal. |
 | `POST /api/v1/secretos/acciones/{accion}` | Ejecuta una acción del Secret Broker (token de agente). |
 | `GET /api/v1/secretos/estado` | Acciones, agentes y secretos cargados, sin valores (token de administración). |
+| `GET /api/v1/secretos/herramientas` | Herramientas selladas del agente en formato MCP, o `?formato=triada` para el Detector (token de agente). |
+| `POST /api/v1/egresos/peticion` | Egreso controlado hacia la web: solo hosts de la allowlist del agente (token de agente). |
+| `GET /api/v1/egresos/estado` | Allowlist, reglas DLP y bloqueos desde el arranque, sin contenido (token de administración). |
 
 Los errores tienen formato fijo `{"detail": ...}`: `422` entrada inválida (sin repetir el valor
 recibido), `413` cuerpo de más de 1 MB, `503` dependencia caída (reintentable) y `500` con un
@@ -200,6 +206,45 @@ sequenceDiagram
 
 Pantalla de estado en `/modulos/secretos` (pide el token de administración; nunca muestra valores).
 
+## Módulo 3: Sealed Tools y control de egresos
+
+Aunque una inyección de prompt tome el control del modelo, los datos privados no pueden salir hacia
+un destino que nadie aprobó, **ni dentro de los parámetros de una herramienta permitida**. Toda
+salida de red de AgentGuard, la del broker y la del egreso web, pasa por un único punto con un orden
+fijo:
+
+```mermaid
+flowchart LR
+    P["Petición saliente"] --> A{"¿host en la<br/>allowlist?"}
+    A -->|no| X1["403 · sin abrir conexión"]
+    A -->|sí| D{"DLP sobre lo que<br/>escribió el agente"}
+    D -->|hallazgo| X2["403 · solo el id de la regla"]
+    D -->|limpio| R{"¿todas las IP<br/>son públicas?"}
+    R -->|no| X1
+    R -->|sí| S["conexión a la IP verificada<br/>TLS contra el nombre"]
+```
+
+- **Allowlist global versionada** ([ejemplo](config/egresos.ejemplo.json)): hosts exactos o
+  `*.dominio` (solo subdominios). **Sin allowlist no sale nada.** Una acción del broker cuyo host no
+  está en la lista aparece bloqueada en su estado.
+- **Solo IP públicas:** un host permitido que resuelve a la red interna, a `localhost` o a la
+  metadata de la nube (`169.254.169.254`) se bloquea. La conexión va a la IP ya verificada, así que
+  un cambio de DNS entre la verificación y la conexión (*DNS rebinding*) no sirve.
+- **DLP determinista:** secretos del propio broker, credenciales conocidas (AWS, GitHub, Slack,
+  Google, Stripe, JWT, claves privadas), tarjetas (Luhn), RUT con dígito verificador y marcadores
+  propios como *canary tokens*. Revisa también una capa de codificación (base64, hex, URL). Cada
+  regla bloquea u observa. Es un freno, no la garantía: un modelo decidido puede cifrar el dato; la
+  garantía son los parámetros acotados y la allowlist.
+- **Herramientas selladas:** las acciones pueden no llevar credencial, y
+  `GET /secretos/herramientas` entrega las del agente en formato MCP (`inputSchema`, anotaciones)
+  para registrarlas tal cual en un runtime MCP o LangChain: el modelo solo elige funciones acotadas.
+  Con `?formato=triada`, el mismo catálogo se analiza en el Detector como salida restringida.
+- **Egreso web:** un agente que necesita consultar sitios los pide a `POST /egresos/peticion`, solo
+  hacia los hosts de su lista, sin credenciales ni cookies. La respuesta llega marcada como
+  `no_confiable`.
+
+Pantalla de estado en `/modulos/egresos`.
+
 ## Puesta en marcha
 
 Con Docker:
@@ -254,10 +299,12 @@ backend/
     core/            configuración, errores, salud, registro, tope, archivos estáticos
     base/            pool de PostgreSQL (único que importa asyncpg)
     triada/          módulo 1: normalizar · reglas · clasificar · análisis · rutas
-    secretos/        módulo 2: config · fuentes · identidad · petición · ejecutor · limpieza
+    agentes/         identidad de los agentes y límite por minuto, compartidos por los módulos
+    secretos/        módulo 2: config · fuentes · petición · broker · catálogo de herramientas
+    egresos/         módulo 3: única salida de red · allowlist · DNS · DLP · limpieza · egreso web
   tests/             unitarias con dobles; integración marcada `integracion`
 frontend/src/        React + TypeScript: página de estado y pantallas de los módulos
-config/              ejemplo de acciones del Secret Broker
+config/              ejemplos de acciones del broker y de la allowlist de egresos
 docs/specs/          especificación, plan y tareas de cada funcionalidad
 Dockerfile           imagen única (Node construye, Python sirve)
 docker-compose.yml   app + PostgreSQL local

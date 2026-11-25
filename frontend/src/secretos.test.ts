@@ -1,17 +1,33 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { cabeceraAdmin, interpretarEstado, resumen } from "./secretos.ts";
+import { cabeceraAdmin, estadoAccion, interpretarEstado, resumen } from "./secretos.ts";
 import type { EstadoBroker } from "./secretos.ts";
 
 const ESTADO: EstadoBroker = {
   configurado: true,
   error: null,
   acciones: [
-    { id: "github.crear_issue", descripcion: "", secreto: "github_token", host: "api.github.com", disponible: true },
-    { id: "eco.query", descripcion: "", secreto: "eco_key", host: "eco.ejemplo", disponible: false },
+    {
+      id: "github.crear_issue",
+      descripcion: "",
+      secreto: "github_token",
+      host: "api.github.com",
+      bloqueada_por_egresos: false,
+      disponible: true,
+    },
+    {
+      id: "eco.query",
+      descripcion: "",
+      secreto: "eco_key",
+      host: "eco.ejemplo",
+      bloqueada_por_egresos: false,
+      disponible: false,
+    },
   ],
-  agentes: [{ id: "soporte", acciones: ["github.crear_issue"], max_por_minuto: 30, token_cargado: true }],
+  agentes: [
+    { id: "soporte", acciones: ["github.crear_issue"], max_por_minuto: 30, web: [], token_cargado: true },
+  ],
   secretos: [{ nombre: "github_token", cargado: true, compartido: false, acciones: ["github.crear_issue"] }],
   avisos: [],
 };
@@ -43,4 +59,15 @@ test("spec0003_rf01_sin_configurar", () => {
 test("spec0003_e11_cabecera_de_admin", () => {
   assert.deepEqual(cabeceraAdmin("  abc  "), { Authorization: "Bearer abc" });
   assert.equal(cabeceraAdmin("   "), null);
+});
+
+test("spec0004_e3_estado_de_cada_accion", () => {
+  const [disponible, sinSecreto] = ESTADO.acciones;
+  assert.ok(disponible && sinSecreto);
+  assert.equal(estadoAccion(disponible), "Disponible");
+  assert.equal(estadoAccion(sinSecreto), "Sin secreto cargado");
+  assert.equal(
+    estadoAccion({ ...disponible, secreto: null, bloqueada_por_egresos: true, disponible: false }),
+    "Bloqueada por egresos",
+  );
 });
