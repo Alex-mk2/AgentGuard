@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     frontend_dist: Path = RAIZ_REPO / "frontend" / "dist"  # si no existe, solo se sirve la API
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 
+    # Secret Broker (SPEC-0003). Sin archivo, el módulo queda apagado y responde 503.
+    secretos_config: Path | None = None
+    # Solo desarrollo y pruebas: permite acciones http:// hacia localhost (E8).
+    secretos_http_local: bool = False
+
     @property
     def origenes_frontend(self) -> list[str]:
         return [origen.strip() for origen in self.frontend_origin.split(",") if origen.strip()]

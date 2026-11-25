@@ -8,8 +8,8 @@ export type Respuesta =
   | { tipo: "sin_respuesta" };
 
 /** GET con timeout. Nunca lanza: si la API no contesta devuelve `sin_respuesta` (SPEC-0001 E12). */
-export function obtener(ruta: string): Promise<Respuesta> {
-  return pedir(ruta, { method: "GET" });
+export function obtener(ruta: string, cabeceras?: Record<string, string>): Promise<Respuesta> {
+  return pedir(ruta, { method: "GET", headers: cabeceras });
 }
 
 /** POST de JSON con el mismo contrato que `obtener`. `cuerpo` ya viene serializado. */

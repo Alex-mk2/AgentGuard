@@ -309,3 +309,14 @@ button.principal {
 .tabla .etiqueta {
   margin-left: 0.4rem;
 }
+
+.campo {
+  flex: 1;
+  min-width: 12rem;
+  font: inherit;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--borde);
+  border-radius: 0.375rem;
+  background: var(--fondo);
+  color: var(--texto);
+}

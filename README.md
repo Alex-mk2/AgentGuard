@@ -9,6 +9,7 @@ en contra de quien lo despliega.
 
 **Índice:** [El problema](#el-problema-la-tríada-letal) · [Módulos](#módulos) ·
 [Arquitectura](#arquitectura) · [Detector de la Tríada](#módulo-1-detector-de-la-tríada-letal) ·
+[Secret Broker](#módulo-2-secret-broker) ·
 [Puesta en marcha](#puesta-en-marcha) · [Calidad](#calidad-y-ci) · [Estructura](#estructura)
 
 ## El problema: la Tríada Letal
@@ -34,7 +35,7 @@ AgentGuard rompe la tríada en cada punto en vez de confiar en que el modelo se 
 | # | Módulo | Qué hace | Estado |
 |---|---|---|---|
 | 1 | **Detector de la Tríada Letal** | Revisa el manifiesto de herramientas de un agente y alerta si reúne las tres condiciones. | ✅ Disponible |
-| 2 | **Secret Broker** | Inyecta las credenciales al ejecutar la acción; el modelo nunca ve el secreto. | Pendiente |
+| 2 | **Secret Broker** | Inyecta las credenciales al ejecutar la acción; el modelo nunca ve el secreto. | ✅ Disponible |
 | 3 | **Sealed Tools y control de egresos (DLP)** | Herramientas acotadas y bloqueo (403) de cualquier destino fuera de la allowlist. | Pendiente |
 | 4 | **Contención de prompt injection** | Inspección en cada salto (sesión, memoria, agente a agente) y ejecución aislada. | Pendiente |
 | 5 | **Human-in-the-Loop Gate** | Aprobación explícita antes de toda acción irreversible. | Pendiente |
@@ -51,8 +52,8 @@ flowchart LR
 
     classDef listo fill:#1a7f37,color:#fff,stroke:#1a7f37
     classDef pendiente stroke-dasharray: 4 3
-    class M1 listo
-    class M2,M3,M4,M5 pendiente
+    class M1,M2 listo
+    class M3,M4,M5 pendiente
 ```
 
 ## Arquitectura
@@ -74,11 +75,13 @@ flowchart LR
         subgraph API["FastAPI · /api/v1"]
             S["salud y versión"]
             T["triada · módulo 1"]
-            F["módulos 2 a 5"]
+            B["secretos · módulo 2"]
+            F["módulos 3 a 5"]
         end
     end
 
     S -.->|"readiness · 2 s"| DB[("PostgreSQL 16")]
+    B -->|"secreto inyectado · solo el host declarado"| X["APIs externas"]
 
     classDef pendiente stroke-dasharray: 4 3
     class F pendiente
@@ -90,6 +93,8 @@ flowchart LR
 | `GET /api/v1/health/dependencias` | `200` si PostgreSQL responde, `503` si no responde en 2 s (readiness). |
 | `GET /api/v1/version` | Versión de la app. |
 | `POST /api/v1/triada/analisis` | Reporte del Detector de la Tríada Letal. |
+| `POST /api/v1/secretos/acciones/{accion}` | Ejecuta una acción del Secret Broker (token de agente). |
+| `GET /api/v1/secretos/estado` | Acciones, agentes y secretos cargados, sin valores (token de administración). |
 
 Los errores tienen formato fijo `{"detail": ...}`: `422` entrada inválida (sin repetir el valor
 recibido), `413` cuerpo de más de 1 MB, `503` dependencia caída (reintentable) y `500` con un
@@ -162,6 +167,39 @@ curl -s -X POST http://localhost:8000/api/v1/triada/analisis \
 URL que pide puede llevar datos afuera. El reporte lo destaca. También hay una pantalla en
 `/modulos/triada` para pegar o cargar el manifiesto.
 
+## Módulo 2: Secret Broker
+
+El agente pide una acción por su nombre (`github.crear_issue`) con sus parámetros, y AgentGuard la
+ejecuta con la credencial inyectada. **El modelo nunca ve la credencial**: no está en el prompt, ni
+en el código que escribe, ni en la respuesta que recibe.
+
+```mermaid
+sequenceDiagram
+    participant A as Agente
+    participant G as AgentGuard
+    participant X as API externa
+    A->>G: POST /secretos/acciones/github.crear_issue<br/>token del agente + parámetros
+    G->>G: ¿el agente puede usar la acción?<br/>valida parámetros · arma la URL fija
+    G->>X: petición con Authorization: Bearer ***
+    X-->>G: respuesta (puede reflejar el secreto)
+    G->>G: borra el secreto en claro, base64, URL y JSON<br/>filtra cabeceras (nunca set-cookie)
+    G-->>A: {"estado": 201, "cuerpo": ..., "limpiado": false}
+```
+
+- **Mínimo privilegio:** cada agente tiene su token y solo sus acciones; `401`, `403` (exista o no
+  la acción) y un límite de peticiones por minuto (`429`).
+- **El modelo no desvía la petición:** esquema, host y método son fijos; los parámetros van
+  codificados en huecos declarados y la URL final se verifica antes de salir. Solo `https`, sin
+  seguir redirecciones y sin usar proxies del entorno.
+- **Configuración versionada:** las acciones y los permisos viven en un JSON que pasa por PR
+  ([ejemplo](config/acciones.ejemplo.json)); los secretos y tokens, en variables de entorno
+  (`AGENTGUARD_SECRETO_<NOMBRE>`, `AGENTGUARD_AGENTE_<ID>`, `AGENTGUARD_ADMIN_TOKEN`), que se
+  retiran del entorno al leerlas.
+- **Si AgentGuard cae, el daño es acotado:** sin *core dumps*, proceso no *dumpable* (otro proceso no
+  lee su memoria ni su entorno), sistema de archivos de solo lectura y sin *capabilities*.
+
+Pantalla de estado en `/modulos/secretos` (pide el token de administración; nunca muestra valores).
+
 ## Puesta en marcha
 
 Con Docker:
@@ -216,8 +254,10 @@ backend/
     core/            configuración, errores, salud, registro, tope, archivos estáticos
     base/            pool de PostgreSQL (único que importa asyncpg)
     triada/          módulo 1: normalizar · reglas · clasificar · análisis · rutas
+    secretos/        módulo 2: config · fuentes · identidad · petición · ejecutor · limpieza
   tests/             unitarias con dobles; integración marcada `integracion`
-frontend/src/        React + TypeScript: página de estado y detector
+frontend/src/        React + TypeScript: página de estado y pantallas de los módulos
+config/              ejemplo de acciones del Secret Broker
 docs/specs/          especificación, plan y tareas de cada funcionalidad
 Dockerfile           imagen única (Node construye, Python sirve)
 docker-compose.yml   app + PostgreSQL local

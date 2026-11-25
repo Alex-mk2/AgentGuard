@@ -7,5 +7,8 @@ uvicorn[standard]==0.54.0
 pydantic==2.14.4
 pydantic-settings==2.16.3      # lee .env (ver .env.example)
 
+# Llamadas salientes del Secret Broker: solo lo importa app/secretos/ejecutor.py (SPEC-0003)
+httpx==0.28.1
+
 # PostgreSQL: solo lo importa app/base (context.md §2)
 asyncpg==0.32.0

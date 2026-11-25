@@ -84,5 +84,6 @@ test("spec0002_e14_rutas", () => {
   assert.equal(paginaDe("/"), "estado");
   assert.equal(paginaDe("/modulos/triada"), "triada");
   assert.equal(paginaDe("/modulos/triada/"), "triada");
+  assert.equal(paginaDe("/modulos/secretos"), "secretos");
   assert.equal(paginaDe("/otra"), "no_encontrada");
 });

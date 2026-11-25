@@ -42,11 +42,11 @@ test("spec0001_rf10_version", () => {
   assert.equal(interpretarVersion({ tipo: "sin_respuesta" }), null);
 });
 
-// Cambio intencional (SPEC-0002 E16): el módulo 1 pasa a activo; los demás siguen pendientes.
+// Cambios intencionales: SPEC-0002 E16 activa el módulo 1 y SPEC-0003 E13 el módulo 2.
 test("spec0001_e11_los_5_modulos_y_su_estado", () => {
   assert.equal(MODULOS.length, 5);
   assert.deepEqual(
     MODULOS.filter((modulo) => modulo.estado === "activo").map((modulo) => modulo.id),
-    ["triada"],
+    ["triada", "secretos"],
   );
 });
