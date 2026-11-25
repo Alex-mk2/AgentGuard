@@ -1,5 +1,6 @@
 # Entorno local (SPEC-0001 H1): `docker compose up --build` y abrir http://localhost:8000
 # Credenciales solo de desarrollo; los puertos se publican solo en 127.0.0.1.
+# Postgres usa 5433 en el equipo (como CondorForge) para no chocar con un PostgreSQL instalado.
 services:
   db:
     image: postgres:16.16
@@ -7,7 +8,7 @@ services:
       POSTGRES_USER: agentguard
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agentguard}
       POSTGRES_DB: agentguard
-    ports: ["127.0.0.1:5432:5432"]
+    ports: ["127.0.0.1:${POSTGRES_PUERTO:-5433}:5432"]
     volumes: [datos:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U agentguard -d agentguard"]
