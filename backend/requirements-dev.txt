@@ -1,0 +1,17 @@
+# Dependencias de desarrollo y pruebas.
+-r requirements.txt
+
+pytest==9.2.0
+pytest-asyncio==1.5.0
+httpx==0.28.1                  # requerido por el TestClient de FastAPI
+
+# Calidad (config en pyproject.toml)
+ruff==0.17.6                   # lint y formato
+mypy==2.4.1                    # tipado estricto (context.md §5)
+
+# Hooks de .pre-commit-config.yaml (gitleaks). Tras instalar: `pre-commit install`
+pre-commit==4.7.0
+
+# Auditoría de seguridad en el CI: dependencias y análisis estático
+pip-audit==2.10.1
+bandit==1.9.4                  # config en pyproject.toml
