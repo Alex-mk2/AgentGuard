@@ -1,6 +1,19 @@
 # AgentGuard
 
-_Pendiente: qué problema resuelve y para quién._
+Proxy/middleware de seguridad que **protege agentes de IA en tiempo de ejecución**, con enfoque
+Zero Trust y alineado con el Secure AI Framework (SAIF).
+
+Con los agentes, la superficie de ataque crece: ya no basta con proteger datos, nube, API e
+infraestructura, porque el propio modelo puede ser manipulado. El riesgo central es la **Tríada
+Letal**: un agente que lee **datos privados**, ingiere **contenido no confiable** y tiene **salida
+externa** puede ser llevado por una inyección de prompt a exfiltrar esos datos.
+
+## Módulos
+1. **Detector de la Tríada Letal:** revisa el manifiesto de herramientas de un agente y alerta si reúne las tres condiciones.
+2. **Secret Broker:** inyecta las credenciales al ejecutar la acción; el modelo nunca ve el secreto.
+3. **Sealed Tools y control de egresos (DLP):** herramientas acotadas y bloqueo (403) de cualquier destino fuera de la allowlist.
+4. **Contención de prompt injection y rogue actions:** inspección en cada salto y ejecución aislada.
+5. **Human-in-the-Loop Gate:** aprobación explícita antes de toda acción irreversible.
 
 ## Arquitectura
 Monolito: un backend **FastAPI** (Python 3.12) que expone la API en `/api/v1` y sirve el build de
