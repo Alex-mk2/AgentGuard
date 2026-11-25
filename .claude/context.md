@@ -107,7 +107,8 @@ La lógica se separa de los componentes para poder probarla así.
 - Un cambio que rompe un test no se integra; si el test está mal, se corrige en el mismo cambio y se explica en el commit.
 
 ## 7. Las 5 capas de verificación
-Cada PR a `main` pasa por cinco checks, todos obligatorios:
+Cada PR a `main` pasa por cinco checks, todos obligatorios. Corren **solo en PR** (no tras el merge) y
+un commit nuevo cancela la corrida anterior del mismo PR: los minutos de Actions son limitados.
 
 | Check | Qué verifica |
 |---|---|
