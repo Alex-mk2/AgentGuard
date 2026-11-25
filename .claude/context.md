@@ -4,7 +4,33 @@
 > trabajo en curso vive en `PROGRESS.md`; la estructura del código, en `graphify query`.
 
 ## 1. Qué es
-_Pendiente: el problema que resuelve AgentGuard y para quién, en dos o tres frases._
+AgentGuard es un **proxy/middleware de seguridad que protege agentes de IA en tiempo de ejecución**,
+con enfoque Zero Trust y alineado con el **Secure AI Framework (SAIF)** de Google. Con los agentes,
+la superficie de ataque ya no es solo datos, nube, API e infraestructura: también lo es el propio
+modelo, que puede ser manipulado por el contenido que lee y usar sus herramientas en contra de quien
+lo despliega.
+
+El riesgo central que ataca es la **Tríada Letal**: un agente que a la vez (1) lee **datos privados**,
+(2) ingiere **contenido no confiable** (web, correos, documentos) y (3) tiene **salida externa**
+(webhooks, APIs) puede ser llevado por una inyección de prompt a exfiltrar esos datos. AgentGuard
+rompe la tríada en cada punto en vez de confiar en que el modelo se porte bien.
+
+**Fuera de alcance:** la postura de infraestructura cloud, redes y SDLC. Eso es de OptiVeil v2, un
+proyecto separado; no se mezclan.
+
+### Los 5 módulos
+| # | Módulo | Paquete | Qué hace |
+|---|---|---|---|
+| 1 | Detector de la Tríada Letal | `app/triada` | Analiza el manifiesto de herramientas de un agente y alerta como crítico si combina datos privados + contenido no confiable + salida de red sin control de egresos. |
+| 2 | Secret Broker | `app/secretos` | El LLM pide ejecutar una acción y el intermediario inyecta la API key o el token desde un vault en memoria al ejecutarla. **El secreto nunca entra en la ventana de contexto del modelo.** |
+| 3 | Sealed Tools y control de egresos (DLP) | `app/egresos` | Envuelve las herramientas del agente (MCP o LangChain): el modelo solo elige entre funciones acotadas y no arma el payload crudo; cualquier salida fuera de la allowlist de dominios responde **403**. |
+| 4 | Contención de prompt injection y rogue actions | `app/inyeccion` | Inspecciona cada salto (sesión, memoria, agente a agente) y ejecuta en un sandbox con acceso desactivado por defecto. |
+| 5 | Human-in-the-Loop Gate | `app/aprobacion` | Pausa la ejecución y exige aprobación explícita (webhook o dashboard) ante toda acción irreversible o que modifique el plano de control. |
+
+Origen: evento de Deloitte y charlas de Google Cloud sobre Securing AI (2026-11). La lámina «Cómo
+podemos proteger la AI» divide la defensa en aplicación, datos, modelo e infraestructura;
+AgentGuard construye equivalentes propios de los controles de aplicación, datos y modelo en vez de
+usar los productos de Google Cloud.
 
 ## 2. Arquitectura: monolito
 - **Un repo, un proceso, una imagen.** El backend FastAPI expone la API en `/api/v1/*` y sirve el
