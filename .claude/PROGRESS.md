@@ -7,7 +7,8 @@
 - `chore/fundacion` mergeada (#1, integrada por Alex) — base del repo tomada de CondorForge: skills, hooks, gitleaks, CI con las 5 capas, Dependabot y protección de `main`. — Alex, 2026-11-24
 - `docs/que-es-agentguard` mergeada (#2, integrada por Alex) — qué es AgentGuard y sus 5 módulos en `context.md` §1 y el README. — Alex, 2026-11-25
 - `feat/esqueleto-monolito` mergeada (#3, integrada por Alex) — [SPEC-0001](../docs/specs/0001-esqueleto-monolito/spec.md): `crear_app`, health/readiness, errores 503/500 + `id_error`, pool de Postgres, página de estado en React + TypeScript, Dockerfile multi-etapa y compose. Las 5 capas dejaron de omitirse. — Alex, 2026-11-25
-- `docs/readme-diagramas` (Alex) — README pensado para el repo público: la Tríada Letal, los módulos y su estado, arquitectura, flujo del detector con ejemplo real, puesta en marcha y CI, con 5 diagramas Mermaid (validados con el parser de mermaid 11). Sale «Cómo trabajamos» y «Claude Code»: eso vive en `context.md`. Al terminar cada módulo, actualizar su fila y los diagramas. — Alex, 2026-11-25
+- `feat/secret-broker` (Alex) — [SPEC-0003](../docs/specs/0003-secret-broker/spec.md), módulo 2: el agente pide una acción y AgentGuard inyecta la credencial; el modelo nunca la ve. Mitigaciones del riesgo de concentración: tokens de alcance mínimo con aviso de compartidos, límite por agente, sin core dumps, no dumpable, solo lectura y sin capabilities. Probado con la imagen endurecida contra httpbin real: la cabecera reflejada llega como `[SECRETO]`, 0 apariciones en respuesta y logs. — Alex, 2026-11-25
+- `docs/readme-diagramas` mergeada (#5, integrada por Alex) — README pensado para el repo público: la Tríada Letal, los módulos y su estado, arquitectura, flujo del detector con ejemplo real, puesta en marcha y CI, con 5 diagramas Mermaid (validados con el parser de mermaid 11). Sale «Cómo trabajamos» y «Claude Code»: eso vive en `context.md`. Al terminar cada módulo, actualizar su fila y los diagramas. — Alex, 2026-11-25
 - `feat/detector-triada` mergeada (#4, integrada por Alex) — [SPEC-0002](../docs/specs/0002-detector-triada/spec.md), módulo 1: `POST /api/v1/triada/analisis` (MCP `tools/list` y formato propio), 23 reglas por palabras con evidencia, peor caso para lo sin clasificar, tope global de 1 MB y pantalla `/modulos/triada`. Probado con la imagen: los 6 manifiestos de referencia, 422/413, y servidores MCP reales (filesystem → baja, fetch → media, juntos → crítica). — Alex, 2026-11-25
 
 ## Decisiones
@@ -21,10 +22,14 @@
 ## Pendientes
 - [ ] Spec futura: historial de análisis de la Tríada (exige autenticación y retención; SPEC-0002 D-03).
 - [ ] Idea futura: modelo local como segunda opinión del Detector, que solo pueda sumar patas (SPEC-0002 D-02).
-- [ ] Siguiente módulo: Secret Broker (módulo 2), un módulo por spec en el orden 1 → 5.
+- [ ] Spec futura: separar el Secret Broker en un proceso propio, sin la superficie del resto (opción 6 de la revisión de riesgos del 2026-11-25; la que resuelve la concentración de credenciales).
+- [ ] Spec futura: gestor de secretos externo (Vault / Secret Manager) y credenciales de vida corta como nuevas `FuenteSecretos` (opciones 5 y 4).
+- [ ] Chore futuro: imagen sin shell (base distroless) y verificaciones de la capa `imagen` sin `docker exec … test`.
 - [ ] CD (despliegue automático desde `main`) cuando el flujo de CI esté internalizado.
 
 ## Trampas conocidas
+- `httpx.Response(content=...)` en `MockTransport` llega ya leída: `aiter_raw()` lanza `StreamConsumed`. Usar `aiter_bytes()`, que además descomprime (necesario para limpiar secretos). — Alex, 2026-11-25
+- Bandit lee como ids de prueba las palabras escritas después de `# nosec`: el motivo va en la línea de arriba. — Alex, 2026-11-25
 - En Windows, `StaticFiles` entrega la ruta con `\`: para saber si una ruta es de la API se mira `scope["path"]`, no el `path` del método (lo detectó `test_spec0001_e10_api_gana_al_frontend`). — Alex, 2026-11-25
 - `FRONTEND_DIST=` vacío en el `.env` apunta a la carpeta actual: déjalo comentado si no lo usas.
 - Puertos en el equipo de Alex: 5432 = PostgreSQL instalado, 5433 = Postgres de CondorForge, 8000 = uvicorn de CondorForge en desarrollo. AgentGuard publica Postgres en el **5434** (`POSTGRES_PUERTO`) y la app en `APP_PUERTO` (8000 por defecto; usar otro si CondorForge está corriendo). — Alex, 2026-11-25

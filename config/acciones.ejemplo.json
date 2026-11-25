@@ -1,0 +1,31 @@
+{
+  "acciones": [
+    {
+      "id": "github.crear_issue",
+      "descripcion": "Crea un issue en un repositorio de GitHub",
+      "metodo": "POST",
+      "url": "https://api.github.com/repos/{owner}/{repo}/issues",
+      "parametros": {
+        "owner": { "tipo": "texto", "en": "ruta", "patron": "^[A-Za-z0-9-]{1,39}$" },
+        "repo": { "tipo": "texto", "en": "ruta", "patron": "^[A-Za-z0-9._-]{1,100}$" },
+        "titulo": { "tipo": "texto", "en": "cuerpo", "campo": "title", "max_largo": 256 },
+        "cuerpo": { "tipo": "texto", "en": "cuerpo", "campo": "body", "max_largo": 10000, "requerido": false }
+      },
+      "secreto": "github_token",
+      "inyeccion": { "cabecera": "Authorization", "formato": "Bearer {secreto}" },
+      "timeout_s": 10
+    },
+    {
+      "id": "demo.eco_cabeceras",
+      "descripcion": "Demostración: httpbin devuelve las cabeceras que recibe; AgentGuard debe limpiar el secreto",
+      "metodo": "GET",
+      "url": "https://httpbin.org/headers",
+      "secreto": "demo_token",
+      "inyeccion": { "cabecera": "Authorization", "formato": "Bearer {secreto}" }
+    }
+  ],
+  "agentes": [
+    { "id": "soporte", "acciones": ["github.crear_issue"], "max_por_minuto": 30 },
+    { "id": "demo", "acciones": ["demo.eco_cabeceras"], "max_por_minuto": 10 }
+  ]
+}

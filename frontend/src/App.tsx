@@ -1,4 +1,5 @@
 import { Estado } from "./paginas/Estado.tsx";
+import { Secretos } from "./paginas/Secretos.tsx";
 import { Triada } from "./paginas/Triada.tsx";
 import { paginaDe } from "./rutas.ts";
 
@@ -14,7 +15,15 @@ export function App() {
         </h1>
         <p className="subtitulo">Seguridad en tiempo de ejecución para agentes de IA</p>
       </header>
-      {pagina === "triada" ? <Triada /> : pagina === "estado" ? <Estado /> : <NoEncontrada />}
+      {pagina === "triada" ? (
+        <Triada />
+      ) : pagina === "secretos" ? (
+        <Secretos />
+      ) : pagina === "estado" ? (
+        <Estado />
+      ) : (
+        <NoEncontrada />
+      )}
     </main>
   );
 }

@@ -37,8 +37,11 @@ USER 10001
 EXPOSE 8000
 
 # /health no consulta la base: una base caída no debe reiniciar el contenedor (SPEC-0001 D-01).
+# Forma exec, sin shell (SPEC-0003 E17): Python lee PORT por su cuenta.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD ["sh", "-c", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:'+'${PORT:-8000}'+'/api/v1/health', timeout=4)\""]
+    CMD ["python", "-c", "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('PORT', '8000') + '/api/v1/health', timeout=4)"]
 
-# --no-access-log: el log de uvicorn registra la IP; la app tiene el suyo sin IP (RF-08).
-CMD ["sh", "-c", "exec uvicorn app.main:crear_app --factory --host 0.0.0.0 --port ${PORT:-8000} --no-access-log"]
+# app.arranque endurece el proceso (sin core dumps, no dumpable) y lanza uvicorn sin su log de
+# acceso, que registra la IP (RF-08). Correr con --read-only --tmpfs /tmp --cap-drop ALL
+# --security-opt no-new-privileges, como en docker-compose.yml y en la capa `imagen` del CI.
+CMD ["python", "-m", "app.arranque"]

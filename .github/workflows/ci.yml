@@ -214,7 +214,10 @@ jobs:
         # Abrir no conecta: con valores falsos la API arranca igual.
         if: steps.check.outputs.exists == 'true'
         run: |
+          # Con las mismas restricciones que docker-compose.yml (SPEC-0003 E17): si la app
+          # necesitara escribir en disco o una capability, este paso falla.
           docker run -d --name app -p 8000:8000 \
+            --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges \
             -e DATABASE_URL=postgresql://prueba.invalid/ci agentguard
 
       - name: Esperar el health
@@ -237,6 +240,10 @@ jobs:
           docker exec app test ! -e /srv/frontend/src
           docker exec app test -f /srv/frontend/dist/index.html
           ! docker exec app sh -c "command -v node"   # la imagen final no lleva Node
+          # SPEC-0003 E17: sin core dumps y proceso no dumpable (otro proceso no lee su entorno).
+          docker exec app grep -E "^Max core file size +0 +0" /proc/1/limits
+          ! docker exec app cat /proc/1/environ
+          test "$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' app)" = "true"
 
       - name: Sirve el frontend y la API
         # SPEC-0001 E10, E13 y E17: una sola imagen responde las dos cosas.

@@ -20,8 +20,8 @@ export const MODULOS: readonly Modulo[] = [
     id: "secretos",
     nombre: "Secret Broker",
     descripcion: "Inyecta credenciales al ejecutar; el modelo nunca ve el secreto.",
-    estado: "pendiente",
-    ruta: null,
+    estado: "activo", // SPEC-0003
+    ruta: "/modulos/secretos",
   },
   {
     id: "egresos",
