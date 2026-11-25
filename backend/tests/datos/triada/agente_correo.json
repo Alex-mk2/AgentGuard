@@ -1,0 +1,46 @@
+{
+  "tools": [
+    {
+      "name": "read_inbox",
+      "description": "Lists the latest emails in the user's inbox",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "folder": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "name": "send_email",
+      "description": "Sends an email on behalf of the user",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "to": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "name": "search_customers",
+      "description": "Finds customers in the CRM",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  ]
+}

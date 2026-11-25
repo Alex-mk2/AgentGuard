@@ -1,0 +1,26 @@
+{
+  "agente": "asistente-correo",
+  "herramientas": [
+    {
+      "nombre": "leer_bandeja",
+      "patas": [
+        "datos_privados",
+        "no_confiable"
+      ]
+    },
+    {
+      "nombre": "notificar",
+      "parametros": [
+        "url"
+      ],
+      "patas": [
+        "salida_externa"
+      ],
+      "egreso": {
+        "allowlist": [
+          "hooks.empresa.cl"
+        ]
+      }
+    }
+  ]
+}

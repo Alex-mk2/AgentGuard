@@ -3,11 +3,16 @@ name: CI
 # Las 5 capas que exige la protección de main: backend-tests, frontend, integracion, imagen y gitleaks
 # (este último en secretos.yml). Mientras una parte del monolito no exista, su job pasa con un aviso;
 # en cuanto llega el archivo que lo activa, la capa corre entera sin tocar este archivo.
+# Solo en PR: `main` exige la rama al día y no admite push directo, así que el PR ya probó el mismo
+# código que queda en `main`; repetirlo tras el merge solo gastaba minutos de Actions.
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
+
+# Un commit nuevo en el mismo PR cancela la corrida anterior, que ya no sirve.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 # El token del CI solo lee el repo, aunque cambie el valor por defecto de GitHub.
 permissions:

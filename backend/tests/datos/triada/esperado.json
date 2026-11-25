@@ -1,0 +1,8 @@
+{
+  "agente_correo.json": "critica",
+  "agente_navegacion.json": "critica",
+  "asistente_bd.json": "baja",
+  "soporte_tickets.json": "media",
+  "solo_lectura.json": "baja",
+  "correo_restringido.json": "alta"
+}

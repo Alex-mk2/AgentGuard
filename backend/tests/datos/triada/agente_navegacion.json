@@ -1,0 +1,32 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "tools": [
+      {
+        "name": "fetch",
+        "description": "Fetches a URL from the internet and returns its content",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "read_file",
+        "description": "Reads a file from the local filesystem",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

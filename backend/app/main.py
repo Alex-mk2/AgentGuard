@@ -12,7 +12,9 @@ from app.core.config import Settings, cargar_settings
 from app.core.errores import registrar_manejadores
 from app.core.registro import RegistroAcceso, configurar_logging
 from app.core.salud import Dependencia
+from app.core.tope import TopePeticion
 from app.core.web import FrontendEstatico, frontend_disponible
+from app.triada import router as router_triada
 
 PREFIJO_API = "/api/v1"
 
@@ -45,6 +47,9 @@ def crear_app(
     app = FastAPI(title="AgentGuard", version=version.VERSION, lifespan=ciclo_de_vida)
     app.state.settings = settings
     registrar_manejadores(app)
+    # Orden: el último agregado envuelve a los demás. Tope adentro de CORS (el 413 sale con CORS) y
+    # el registro de acceso afuera de todo (también registra los 413).
+    app.add_middleware(TopePeticion)
     if settings.origenes_frontend:  # RF-07: sin origen configurado, sin CORS
         app.add_middleware(
             CORSMiddleware,
@@ -55,6 +60,7 @@ def crear_app(
     app.add_middleware(RegistroAcceso)
     app.include_router(salud.router, prefix=PREFIJO_API)
     app.include_router(version.router, prefix=PREFIJO_API)
+    app.include_router(router_triada, prefix=PREFIJO_API)  # módulo 1 (SPEC-0002)
 
     # Siempre al final: el frontend responde solo lo que ninguna ruta de la API tomó (RF-03).
     if frontend_disponible(settings.frontend_dist):

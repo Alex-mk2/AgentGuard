@@ -21,7 +21,7 @@ proyecto separado; no se mezclan.
 ### Los 5 módulos
 | # | Módulo | Paquete | Qué hace |
 |---|---|---|---|
-| 1 | Detector de la Tríada Letal | `app/triada` | Analiza el manifiesto de herramientas de un agente y alerta como crítico si combina datos privados + contenido no confiable + salida de red sin control de egresos. |
+| 1 | Detector de la Tríada Letal ✅ | `app/triada` | Analiza el manifiesto de herramientas de un agente y alerta como crítico si combina datos privados + contenido no confiable + salida de red sin control de egresos. `POST /api/v1/triada/analisis`, pantalla `/modulos/triada` (SPEC-0002). |
 | 2 | Secret Broker | `app/secretos` | El LLM pide ejecutar una acción y el intermediario inyecta la API key o el token desde un vault en memoria al ejecutarla. **El secreto nunca entra en la ventana de contexto del modelo.** |
 | 3 | Sealed Tools y control de egresos (DLP) | `app/egresos` | Envuelve las herramientas del agente (MCP o LangChain): el modelo solo elige entre funciones acotadas y no arma el payload crudo; cualquier salida fuera de la allowlist de dominios responde **403**. |
 | 4 | Contención de prompt injection y rogue actions | `app/inyeccion` | Inspecciona cada salto (sesión, memoria, agente a agente) y ejecuta en un sandbox con acceso desactivado por defecto. |
@@ -48,7 +48,14 @@ usar los productos de Google Cloud.
   `test_spec0001_arquitectura.py`.
 - **Errores:** `{"detail": ...}`; base caída → `503` (reintentable); bug → `500` con `id_error`, traza
   solo en el log (SPEC-0001 D-02). El log de acceso no registra IP ni query string.
-- Cada módulo agrega su router en `crear_app()` bajo `/api/v1`, **antes** del montaje del frontend.
+- Cada módulo agrega su router en `crear_app()` bajo `/api/v1`, **antes** del montaje del frontend,
+  y exporta desde su `__init__.py` solo lo público (`app/triada` es el patrón).
+- **Tope global de 1 MB por petición** (`core/tope.py`, `413`). Lo que viene de un agente o de un
+  manifiesto es entrada hostil: límites de cantidad y profundidad en los modelos, y los errores
+  `422` nunca reflejan el valor recibido (`include_input=False`).
+- **Sin IA en las decisiones de seguridad** mientras puedan ser deterministas: un clasificador con
+  LLM es atacable con la misma inyección que se busca detectar (SPEC-0002 D-02). Un modelo local
+  podría sumar señales, nunca quitarlas.
 
 ## 3. Estructura y comandos
 ```
@@ -65,7 +72,7 @@ docker-compose.yml
 
 | Para | Comando |
 |---|---|
-| Todo en local | `docker compose up --build` → http://localhost:8000 |
+| Todo en local | `docker compose up --build` → http://localhost:8000 (`APP_PUERTO` si el 8000 está ocupado; Postgres en el 5434) |
 | Backend en desarrollo | en `backend/`: `uvicorn app.main:crear_app --factory --reload --no-access-log` |
 | Frontend en desarrollo | en `frontend/`: `npm run dev` (Vite reenvía `/api` a `localhost:8000`) |
 | Pruebas | `pytest` · `pytest -m integracion` (con `docker compose up db`) · `npm test` |
@@ -100,7 +107,8 @@ La lógica se separa de los componentes para poder probarla así.
 - Un cambio que rompe un test no se integra; si el test está mal, se corrige en el mismo cambio y se explica en el commit.
 
 ## 7. Las 5 capas de verificación
-Cada PR a `main` pasa por cinco checks, todos obligatorios:
+Cada PR a `main` pasa por cinco checks, todos obligatorios. Corren **solo en PR** (no tras el merge) y
+un commit nuevo cancela la corrida anterior del mismo PR: los minutos de Actions son limitados.
 
 | Check | Qué verifica |
 |---|---|

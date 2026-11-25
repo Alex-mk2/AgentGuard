@@ -5,6 +5,7 @@ export interface Modulo {
   nombre: string;
   descripcion: string;
   estado: "pendiente" | "activo";
+  ruta: string | null; // página del módulo, si ya tiene
 }
 
 export const MODULOS: readonly Modulo[] = [
@@ -12,30 +13,35 @@ export const MODULOS: readonly Modulo[] = [
     id: "triada",
     nombre: "Detector de la Tríada Letal",
     descripcion: "Alerta si un agente combina datos privados, contenido no confiable y salida externa.",
-    estado: "pendiente",
+    estado: "activo", // SPEC-0002
+    ruta: "/modulos/triada",
   },
   {
     id: "secretos",
     nombre: "Secret Broker",
     descripcion: "Inyecta credenciales al ejecutar; el modelo nunca ve el secreto.",
     estado: "pendiente",
+    ruta: null,
   },
   {
     id: "egresos",
     nombre: "Sealed Tools y control de egresos",
     descripcion: "Herramientas acotadas y bloqueo de destinos fuera de la allowlist.",
     estado: "pendiente",
+    ruta: null,
   },
   {
     id: "inyeccion",
     nombre: "Contención de prompt injection",
     descripcion: "Inspección en cada salto y ejecución aislada.",
     estado: "pendiente",
+    ruta: null,
   },
   {
     id: "aprobacion",
     nombre: "Human-in-the-Loop Gate",
     descripcion: "Aprobación explícita antes de toda acción irreversible.",
     estado: "pendiente",
+    ruta: null,
   },
 ];

@@ -1,0 +1,16 @@
+{
+  "agente": "documentacion",
+  "herramientas": [
+    {
+      "nombre": "leer_documentacion",
+      "descripcion": "Lee la documentación pública",
+      "patas": [
+        "no_confiable"
+      ]
+    },
+    {
+      "nombre": "calculadora",
+      "patas": []
+    }
+  ]
+}

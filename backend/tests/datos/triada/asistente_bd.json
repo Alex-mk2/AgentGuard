@@ -1,0 +1,24 @@
+{
+  "tools": [
+    {
+      "name": "run_sql",
+      "description": "Runs a read-only SQL query",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "sql": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "name": "list_tables",
+      "description": "Lists the database tables",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    }
+  ]
+}
