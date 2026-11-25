@@ -2,14 +2,15 @@
 # datos privados no entra por olvido. Nunca agregar .env ni backend/tests.
 *
 !backend/app
-!backend/db/postgres
+!backend/pyproject.toml
 !backend/requirements.txt
 !frontend/src
-!frontend/public
 !frontend/index.html
 !frontend/package.json
 !frontend/package-lock.json
-!frontend/vite.config.*
+!frontend/tsconfig.json
+!frontend/vite.config.ts
 **/__pycache__
 **/*.pyc
 **/node_modules
+**/dist

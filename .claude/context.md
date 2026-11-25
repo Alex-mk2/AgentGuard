@@ -42,24 +42,42 @@ usar los productos de Google Cloud.
 - **Una sola base: PostgreSQL.** Migraciones numeradas `NNN_nombre.sql` en `backend/db/postgres/`;
   un archivo ya aplicado no se edita, cada cambio va en uno nuevo.
 - `GET /api/v1/health` no consulta la base: una base caída no debe reiniciar el contenedor.
+  `GET /api/v1/health/dependencias` sí, con 2 s de timeout (SPEC-0001 D-01).
+- **Solo `app/base` importa `asyncpg`.** Todo módulo que use un driver traduce sus errores de
+  conexión a `ServicioNoDisponible` (`503`); `core` y `main` no conocen drivers. Lo verifica
+  `test_spec0001_arquitectura.py`.
+- **Errores:** `{"detail": ...}`; base caída → `503` (reintentable); bug → `500` con `id_error`, traza
+  solo en el log (SPEC-0001 D-02). El log de acceso no registra IP ni query string.
+- Cada módulo agrega su router en `crear_app()` bajo `/api/v1`, **antes** del montaje del frontend.
 
-## 3. Estructura
+## 3. Estructura y comandos
 ```
 backend/
-  app/            # FastAPI: main.py (crear_app), core/, un paquete por módulo de dominio
+  app/            # main.py (crear_app), core/ (config, errores, salud, registro, web), base/ (Postgres)
+                  # y un paquete por módulo de dominio
   db/postgres/    # migraciones NNN_nombre.sql
   tests/          # unitarios con dobles; integración marcada `integracion`
   pyproject.toml  # ruff, mypy estricto, bandit
-frontend/         # React + Vite; cliente REST único en src/api/
+frontend/         # React + Vite + TypeScript; cliente REST único en src/api/cliente.ts
 Dockerfile        # imagen única del monolito
 docker-compose.yml
 ```
+
+| Para | Comando |
+|---|---|
+| Todo en local | `docker compose up --build` → http://localhost:8000 |
+| Backend en desarrollo | en `backend/`: `uvicorn app.main:crear_app --factory --reload --no-access-log` |
+| Frontend en desarrollo | en `frontend/`: `npm run dev` (Vite reenvía `/api` a `localhost:8000`) |
+| Pruebas | `pytest` · `pytest -m integracion` (con `docker compose up db`) · `npm test` |
+
+Las pruebas del frontend van en `src/**/*.test.ts` sin JSX: `node --test` las ejecuta sin compilar.
+La lógica se separa de los componentes para poder probarla así.
 
 ## 4. Stack
 | Capa | Elección |
 |---|---|
 | Backend | Python 3.12, FastAPI, Pydantic |
-| Frontend | React + Vite, Node 24 |
+| Frontend | React + Vite + TypeScript estricto, Node 24 |
 | Base de datos | PostgreSQL 16 |
 | Empaquetado | Una imagen Docker |
 | Calidad | ruff, mypy estricto, bandit, pip-audit, npm audit, Trivy, gitleaks |

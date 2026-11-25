@@ -129,7 +129,7 @@ jobs:
         working-directory: backend
     services:
       postgres:
-        image: postgres:16.11
+        image: postgres:16.16   # misma que docker-compose.yml
         env:
           POSTGRES_USER: agentguard
           POSTGRES_PASSWORD: agentguard-ci
@@ -228,3 +228,16 @@ jobs:
           test "$(docker exec app id -u)" != "0"
           docker exec app test ! -e /srv/.env
           docker exec app test ! -e /srv/backend/tests
+          docker exec app test ! -e /srv/frontend/node_modules
+          docker exec app test ! -e /srv/frontend/src
+          docker exec app test -f /srv/frontend/dist/index.html
+          ! docker exec app sh -c "command -v node"   # la imagen final no lleva Node
+
+      - name: Sirve el frontend y la API
+        # SPEC-0001 E10, E13 y E17: una sola imagen responde las dos cosas.
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          curl -fsS http://127.0.0.1:8000/ | grep -q '<div id="raiz">'
+          curl -fsS http://127.0.0.1:8000/modulos/triada | grep -q '<div id="raiz">'
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/api/v1/no-existe)" = "404"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/api/v1/health/dependencias)" = "503"

@@ -1,0 +1,11 @@
+# Dependencias de ejecución del backend (Python 3.12). Versiones fijadas para que todo el equipo y
+# la imagen instalen exactamente lo mismo.
+
+# API
+fastapi==0.165.0
+uvicorn[standard]==0.54.0
+pydantic==2.14.4
+pydantic-settings==2.16.3      # lee .env (ver .env.example)
+
+# PostgreSQL: solo lo importa app/base (context.md §2)
+asyncpg==0.32.0
