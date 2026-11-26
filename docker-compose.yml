@@ -26,6 +26,8 @@ services:
       # EGRESOS_CONFIG: /srv/config/egresos.json
       # Contención (SPEC-0005): opcional; sin archivo, valores por defecto.
       # INYECCION_CONFIG: /srv/config/inyeccion.json
+      # Human-in-the-Loop (SPEC-0006): opcional; las solicitudes viven en esta misma base.
+      # APROBACION_CONFIG: /srv/config/aprobacion.json
     env_file:
       - path: .env
         required: false
@@ -33,6 +35,7 @@ services:
     #   - "./config/acciones.json:/srv/config/acciones.json:ro"
     #   - "./config/egresos.json:/srv/config/egresos.json:ro"
     #   - "./config/inyeccion.json:/srv/config/inyeccion.json:ro"
+    #   - "./config/aprobacion.json:/srv/config/aprobacion.json:ro"
     ports: ["127.0.0.1:${APP_PUERTO:-8000}:8000"]  # APP_PUERTO si el 8000 está ocupado
     # Endurecimiento (SPEC-0003 E17): solo lectura, sin capabilities y sin ganar privilegios.
     read_only: true

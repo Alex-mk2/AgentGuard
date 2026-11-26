@@ -35,7 +35,32 @@
         "cabecera": "Authorization",
         "formato": "Bearer {secreto}"
       },
-      "timeout_s": 10
+      "timeout_s": 10,
+      "aprobacion": "si_contaminada"
+    },
+    {
+      "id": "github.borrar_repo",
+      "descripcion": "Borra un repositorio de GitHub. Irreversible: siempre pide aprobación humana",
+      "metodo": "DELETE",
+      "url": "https://api.github.com/repos/{owner}/{repo}",
+      "parametros": {
+        "owner": {
+          "tipo": "texto",
+          "en": "ruta",
+          "patron": "^[A-Za-z0-9-]{1,39}$"
+        },
+        "repo": {
+          "tipo": "texto",
+          "en": "ruta",
+          "patron": "^[A-Za-z0-9._-]{1,100}$"
+        }
+      },
+      "secreto": "github_borrar_token",
+      "inyeccion": {
+        "cabecera": "Authorization",
+        "formato": "Bearer {secreto}"
+      },
+      "aprobacion": "siempre"
     },
     {
       "id": "demo.eco_cabeceras",
@@ -61,13 +86,33 @@
           "max_largo": 200
         }
       }
+    },
+    {
+      "id": "avisos.aprobacion",
+      "descripcion": "Webhook que avisa de una solicitud de aprobación nueva (APROBACION_CONFIG.notificar)",
+      "metodo": "POST",
+      "url": "https://avisos.ejemplo.com/agentguard",
+      "parametros": {
+        "texto": {
+          "tipo": "texto",
+          "en": "cuerpo",
+          "max_largo": 1000
+        }
+      },
+      "secreto": "avisos_token",
+      "inyeccion": {
+        "cabecera": "Authorization",
+        "formato": "Bearer {secreto}"
+      },
+      "aprobacion": "nunca"
     }
   ],
   "agentes": [
     {
       "id": "soporte",
       "acciones": [
-        "github.crear_issue"
+        "github.crear_issue",
+        "github.borrar_repo"
       ],
       "max_por_minuto": 30
     },

@@ -14,11 +14,12 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from app.agentes import Agente, RegistroAgentes
+from app.aprobacion import Motivo, Puerta, Rechazada
 from app.egresos.hosts import Allowlist, EntradaAllowlist, HostInvalido, destino, parsear_entrada
 from app.egresos.limpieza import decodificar_cuerpo, limpiar, limpiar_cabeceras
 from app.egresos.modelos import Bloqueado, ErrorExterno, PeticionSaliente
 from app.egresos.salida import DESTINO_NO_PERMITIDO, Salida
-from app.inyeccion import Contencion, Contenida
+from app.inyeccion import Contencion, Contenida, Sesion
 
 logger = logging.getLogger("agentguard.egresos")
 auditoria = logging.getLogger("agentguard.egresos.auditoria")
@@ -54,10 +55,15 @@ def _invalido(msg: str, campo: str | None = None) -> ErrorEgreso:
 
 class EgresoWeb:
     def __init__(
-        self, salida: Salida, registro: RegistroAgentes, contencion: Contencion | None = None
+        self,
+        salida: Salida,
+        registro: RegistroAgentes,
+        contencion: Contencion | None = None,
+        puerta: Puerta | None = None,
     ) -> None:
         self.salida, self.registro = salida, registro
         self.contencion = contencion or Contencion()
+        self.puerta = puerta or Puerta(None)  # sin puerta, lo que pide aprobación se niega
         self._permitidos: dict[str, Allowlist] = {}
         for agente in registro.definiciones.values():
             entradas: list[EntradaAllowlist] = []
@@ -81,7 +87,11 @@ class EgresoWeb:
         return self._permitidos.get(agente.id, Allowlist())
 
     async def pedir(
-        self, token: str | None, cuerpo: Any, id_sesion: str | None = None
+        self,
+        token: str | None,
+        cuerpo: Any,
+        id_sesion: str | None = None,
+        boleto: str | None = None,
     ) -> dict[str, Any]:
         if self.salida.error is not None:
             raise ErrorEgreso(503, "Control de egresos no configurado: toda salida está bloqueada")
@@ -100,11 +110,16 @@ class EgresoWeb:
             self._auditar(agente.id, "", "403")
             raise ErrorEgreso(403, "Egreso web no permitido para este agente")
         metodo, url, datos = self._validar(cuerpo)
+        # SPEC-0005 E8 (D-02); SPEC-0006 E2: el POST en una sesión contaminada pide aprobación,
+        # salvo `web_aprobacion: nunca`.
+        motivo: Motivo | None = None
         try:
-            self.contencion.autorizar_web(sesion, metodo)  # SPEC-0005 E8 (D-02)
+            self.contencion.autorizar_web(sesion, metodo)
         except Contenida as error:
-            self._auditar(agente.id, "", f"{error.codigo}-contencion", nivel=logging.WARNING)
-            raise ErrorEgreso(error.codigo, error.detalle) from None
+            if error.motivo != "sesion_contaminada" or agente.web_aprobacion == "nunca":
+                self._auditar(agente.id, "", f"{error.codigo}-contencion", nivel=logging.WARNING)
+                raise ErrorEgreso(error.codigo, error.detalle) from None
+            motivo = Motivo("sesion_contaminada", error.origen)
         espera = self.registro.permitir(agente)
         if espera is not None:
             self._auditar(agente.id, "", "429", nivel=logging.WARNING)
@@ -133,6 +148,10 @@ class EgresoWeb:
         )
         inicio = time.perf_counter()
         try:
+            if motivo is not None:
+                # SPEC-0006 E3: lo que igual no saldría se bloquea antes de pedir aprobación.
+                await self.salida.revisar(peticion, agente.id)
+                await self._aprobar(agente, sesion, final.host, metodo, url, datos, motivo, boleto)
             respuesta = await self.salida.enviar(peticion, agente.id)
         except Bloqueado as error:
             raise ErrorEgreso(403, error.detalle) from None
@@ -162,6 +181,32 @@ class EgresoWeb:
             "limpiado": limpiado,
             **campos,
         }
+
+    async def _aprobar(
+        self,
+        agente: Agente,
+        sesion: Sesion,
+        host: str,
+        metodo: str,
+        url: str,
+        datos: Any,
+        motivo: Motivo,
+        boleto: str | None,
+    ) -> None:
+        try:
+            await self.puerta.exigir(
+                agente.id,
+                sesion,
+                f"web:{host}",
+                metodo,
+                {"metodo": metodo, "url": url, "json": datos},
+                {"url": url, "cuerpo": datos},
+                motivo,
+                boleto,
+            )
+        except Rechazada as error:
+            self._auditar(agente.id, host, f"{error.codigo}-aprobacion", nivel=logging.WARNING)
+            raise ErrorEgreso(error.codigo, error.detalle) from None
 
     @staticmethod
     def _validar(cuerpo: Any) -> tuple[str, str, Any]:

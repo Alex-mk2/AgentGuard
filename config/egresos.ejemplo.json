@@ -1,5 +1,5 @@
 {
-  "allowlist": ["api.github.com", "httpbin.org", "*.wikipedia.org"],
+  "allowlist": ["api.github.com", "httpbin.org", "*.wikipedia.org", "avisos.ejemplo.com"],
   "dlp": {
     "modos": { "dlp.rut": "observar" },
     "marcadores": ["CONFIDENCIAL", "canario-cambia-este-valor"]

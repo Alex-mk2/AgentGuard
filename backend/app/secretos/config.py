@@ -95,6 +95,10 @@ class Accion(_Estricto):
     # SPEC-0005 E7: por defecto la respuesta contamina la sesión (un issue o un correo los
     # escribe cualquiera). `confiable` solo para servicios propios cuyo contenido controlas.
     respuesta: Literal["confiable", "no_confiable"] = "no_confiable"
+    # SPEC-0006 E1: cuándo pide aprobación humana. `siempre` para lo irreversible o lo que toca el
+    # plano de control del destino; `si_contaminada` cambia el 403 de SPEC-0005 E8 por una
+    # solicitud; `nunca` conserva ese 403.
+    aprobacion: Literal["siempre", "si_contaminada", "nunca"] = "si_contaminada"
 
     @field_validator("parametros")
     @classmethod
@@ -113,6 +117,8 @@ class Accion(_Estricto):
     def _url_fija(self) -> Self:
         if (self.secreto is None) != (self.inyeccion is None):
             raise ValueError("`secreto` e `inyeccion` van los dos o ninguno")
+        if self.aprobacion == "siempre" and self.metodo == "GET":
+            raise ValueError("una acción GET no tiene efecto: `aprobacion: siempre` no aplica")
         if len(self.nombre_mcp) > 64:
             raise ValueError("el id es muy largo como herramienta MCP (cada `.` cuenta como `__`)")
         partes = urlsplit(self.url)

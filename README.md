@@ -40,7 +40,7 @@ AgentGuard rompe la tríada en cada punto en vez de confiar en que el modelo se 
 | 2 | **Secret Broker** | Inyecta las credenciales al ejecutar la acción; el modelo nunca ve el secreto. | ✅ Disponible |
 | 3 | **Sealed Tools y control de egresos (DLP)** | Herramientas acotadas y bloqueo (403) de cualquier destino fuera de la allowlist. | ✅ Disponible |
 | 4 | **Contención de prompt injection** | Inspecciona lo que entra al contexto y deja sin acciones con efecto a la sesión que leyó contenido no confiable. | ✅ Disponible |
-| 5 | **Human-in-the-Loop Gate** | Aprobación explícita antes de toda acción irreversible. | Pendiente |
+| 5 | **Human-in-the-Loop Gate** | Pausa las acciones irreversibles y las de una sesión contaminada hasta que una persona las apruebe; la aprobación vale una vez. | ✅ Disponible |
 
 Dónde actúa cada módulo sobre la tríada:
 
@@ -54,8 +54,7 @@ flowchart LR
 
     classDef listo fill:#1a7f37,color:#fff,stroke:#1a7f37
     classDef pendiente stroke-dasharray: 4 3
-    class M1,M2,M3,M4 listo
-    class M5 pendiente
+    class M1,M2,M3,M4,M5 listo
 ```
 
 ## Arquitectura
@@ -80,18 +79,18 @@ flowchart LR
             B["secretos · módulo 2"]
             E["egresos · módulo 3<br/>única salida de red"]
             I["inyeccion · módulo 4<br/>sesiones · inspección"]
-            F["módulo 5"]
+            A["aprobacion · módulo 5<br/>solicitudes · boletos"]
         end
     end
 
     S -.->|"readiness · 2 s"| DB[("PostgreSQL 16")]
+    A -->|"solicitudes · migraciones"| DB
     B --> E
     B --> I
+    B --> A
     E --> I
+    E --> A
     E -->|"allowlist · DLP · solo IP públicas"| X["APIs externas y web"]
-
-    classDef pendiente stroke-dasharray: 4 3
-    class F pendiente
 ```
 
 | Endpoint | Qué responde |
@@ -109,6 +108,10 @@ flowchart LR
 | `DELETE /api/v1/inyeccion/sesiones/{id}` | Cierra una sesión: el agente la suya, la administración cualquiera. |
 | `POST /api/v1/inyeccion/inspeccion` | Sanea, marca y envuelve contenido de memoria, otro agente o documentos; contamina la sesión (token de agente). |
 | `GET /api/v1/inyeccion/estado` | Reglas, sesiones contaminadas y bloqueos, sin contenido (token de administración). |
+| `GET /api/v1/aprobacion/solicitudes` | Bandeja: pendientes con sus parámetros y motivo, y las últimas decididas (token de administración). |
+| `POST /api/v1/aprobacion/solicitudes/{id}/decision` | Aprueba o niega una pendiente (token de administración; el de un agente da `401`). |
+| `GET /api/v1/aprobacion/solicitudes/{id}` | Estado de una solicitud propia, para esperar la decisión (token de agente). |
+| `GET /api/v1/aprobacion/estado` | Vencimientos, topes, aviso por webhook y contadores (token de administración). |
 
 Los errores tienen formato fijo `{"detail": ...}`: `422` entrada inválida (sin repetir el valor
 recibido), `413` cuerpo de más de 1 MB, `503` dependencia caída (reintentable) y `500` con un
@@ -265,7 +268,7 @@ flowchart LR
     W["Web · correo · memoria<br/>otro agente · respuesta de una acción"] --> I["Inspección<br/>quita invisibles · marca señales<br/>envuelve como dato"]
     I --> C["Sesión contaminada"]
     C --> Q{"¿acción con efecto?<br/>POST, PUT, DELETE…"}
-    Q -->|sí| X["403 · módulo 5: aprobación humana"]
+    Q -->|sí| X["202 · aprobación humana (módulo 5)"]
     Q -->|"no, solo lectura"| OK["permitida · DLP y allowlist siguen"]
 ```
 
@@ -287,6 +290,65 @@ flowchart LR
   `POST /inyeccion/inspeccion`, que también contamina la sesión.
 
 Pantalla de estado en `/modulos/inyeccion`.
+
+## Módulo 5: Human-in-the-Loop Gate
+
+Hay acciones que no deberían ejecutarse sin que una persona las vea: borrar un repositorio, cambiar
+permisos o escribir hacia afuera desde una sesión que leyó contenido no confiable. AgentGuard las
+pausa, muestra exactamente qué se pide y ejecuta solo lo aprobado, **una vez**.
+
+```mermaid
+sequenceDiagram
+    participant R as Runtime del agente
+    participant G as AgentGuard
+    participant P as Persona (dashboard)
+    R->>G: POST /secretos/acciones/github.crear_issue
+    G->>G: valida, allowlist y DLP (sin enviar)
+    G-->>R: 202 · aprobacion.id · Retry-After 5
+    G-->>P: aviso por webhook (opcional, sin parámetros)
+    loop hasta que decida o venza
+        R->>G: GET /aprobacion/solicitudes/{id}
+    end
+    P->>G: aprobar (ve agente, acción, destino, parámetros y motivo)
+    R->>G: misma llamada + X-AgentGuard-Aprobacion: {id}
+    G->>G: consume el boleto (una vez, misma acción exacta)
+    G-->>R: 200 · resultado de la acción
+```
+
+- **Cuándo pide aprobación:** cada acción declara `"aprobacion"` en
+  [`acciones.json`](config/acciones.ejemplo.json): `siempre` (irreversibles o del plano de control),
+  `si_contaminada` (por defecto: el `403` del módulo 4 pasa a ser una solicitud) o `nunca`
+  (conserva el `403`). Las lecturas nunca piden aprobación. El egreso web usa `web_aprobacion` en
+  cada agente.
+- **Un boleto, una acción:** la aprobación queda atada al agente, a la sesión y a la huella SHA-256
+  de la acción y sus valores. Otro parámetro, otra sesión o un segundo uso dan `403`. Aprobar no
+  limpia la sesión: la siguiente acción con efecto pide su propia aprobación.
+- **Si nadie decide, se niega:** 15 min para decidir y 5 min para usar la aprobación
+  ([configurable](config/aprobacion.ejemplo.json)). Cerrar la sesión cancela sus solicitudes. Con la
+  base caída, lo que pide aprobación responde `503`; nunca se ejecuta sin ella.
+- **Contra la fatiga de aprobación:** una solicitud idéntica no se duplica, hay un tope de 20
+  pendientes por agente, y la bandeja muestra el motivo y las señales de inyección de la sesión.
+- **Lo que no se guarda:** el secreto nunca llega a la bandeja, y los parámetros se borran al
+  decidir; queda la huella para la auditoría.
+
+Para el runtime, un `202` no es un error: espera la decisión y reintenta.
+
+```python
+r = await cliente.post(url, json=cuerpo, headers=cabeceras)
+if r.status_code == 202:
+    id_aprobacion = r.json()["aprobacion"]["id"]
+    while True:
+        await asyncio.sleep(int(r.headers.get("Retry-After", "5")))
+        r = await cliente.get(f"/api/v1/aprobacion/solicitudes/{id_aprobacion}", headers=token)
+        if r.json()["estado"] != "pendiente":
+            break
+    if r.json()["estado"] == "aprobada":
+        r = await cliente.post(
+            url, json=cuerpo, headers={**cabeceras, "X-AgentGuard-Aprobacion": id_aprobacion}
+        )
+```
+
+Bandeja de aprobación en `/modulos/aprobacion`.
 
 ## Puesta en marcha
 
@@ -340,15 +402,17 @@ backend/
   app/
     main.py          crear_app(): monta los routers y el frontend
     core/            configuración, errores, salud, registro, tope, archivos estáticos
-    base/            pool de PostgreSQL (único que importa asyncpg)
+    base/            pool de PostgreSQL y migraciones (único que importa asyncpg)
     triada/          módulo 1: normalizar · reglas · clasificar · análisis · rutas
     agentes/         identidad de los agentes y límite por minuto, compartidos por los módulos
     secretos/        módulo 2: config · fuentes · petición · broker · catálogo de herramientas
     egresos/         módulo 3: única salida de red · allowlist · DNS · DLP · limpieza · egreso web
     inyeccion/       módulo 4: sesiones · contaminación · reglas de inspección · envoltorio
+    aprobacion/      módulo 5: solicitudes · huella · boleto de un solo uso · aviso por webhook
+  db/postgres/       migraciones NNN_nombre.sql; la app las aplica al arrancar
   tests/             unitarias con dobles; integración marcada `integracion`
 frontend/src/        React + TypeScript: página de estado y pantallas de los módulos
-config/              ejemplos de acciones del broker, allowlist de egresos y contención
+config/              ejemplos de acciones del broker, allowlist de egresos, contención y aprobación
 docs/specs/          especificación, plan y tareas de cada funcionalidad
 Dockerfile           imagen única (Node construye, Python sirve)
 docker-compose.yml   app + PostgreSQL local

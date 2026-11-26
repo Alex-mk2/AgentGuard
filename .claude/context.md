@@ -25,7 +25,7 @@ proyecto separado; no se mezclan.
 | 2 | Secret Broker ✅ | `app/secretos` | El LLM pide ejecutar una acción y el intermediario inyecta la API key o el token desde un vault en memoria al ejecutarla. **El secreto nunca entra en la ventana de contexto del modelo.** `POST /api/v1/secretos/acciones/{accion}`, `GET /api/v1/secretos/estado`, pantalla `/modulos/secretos` (SPEC-0003). |
 | 3 | Sealed Tools y control de egresos (DLP) ✅ | `app/egresos` | Única salida de red: allowlist global, DLP determinista y solo IP públicas (conexión a la IP verificada). Herramientas selladas sin credencial y catálogo MCP del agente (`GET /api/v1/secretos/herramientas`); egreso web `POST /api/v1/egresos/peticion`; `GET /api/v1/egresos/estado`, pantalla `/modulos/egresos` (SPEC-0004). |
 | 4 | Contención de prompt injection y rogue actions ✅ | `app/inyeccion` | Una sesión que ingirió contenido no confiable (web, respuesta de una acción, memoria, otro agente) queda contaminada y pierde las acciones con efecto, se detecte o no la inyección. Inspección determinista (invisibles, frases, rol, herramienta, HTML oculto) y envoltorio. Sesiones por `X-AgentGuard-Sesion`; `POST /api/v1/inyeccion/sesiones`, `/inspeccion`, `GET /estado`, pantalla `/modulos/inyeccion` (SPEC-0005). El sandbox de ejecución de código va en una spec propia (D-03). |
-| 5 | Human-in-the-Loop Gate | `app/aprobacion` | Pausa la ejecución y exige aprobación explícita (webhook o dashboard) ante toda acción irreversible o que modifique el plano de control. |
+| 5 | Human-in-the-Loop Gate ✅ | `app/aprobacion` | Pausa toda acción `aprobacion: siempre` (irreversible o del plano de control del destino) y toda acción con efecto de una sesión contaminada (`si_contaminada`, por defecto): `202` con una solicitud, decisión en el dashboard y reintento con `X-AgentGuard-Aprobacion`. El boleto vale una vez y solo para esa huella; si nadie decide, vence y se niega. Aviso opcional por webhook (una acción del broker, sin parámetros). `GET/POST /api/v1/aprobacion/solicitudes…`, `GET /estado`, pantalla `/modulos/aprobacion` (SPEC-0006). |
 
 Origen: evento de Deloitte y charlas de Google Cloud sobre Securing AI (2026-11). La lámina «Cómo
 podemos proteger la AI» divide la defensa en aplicación, datos, modelo e infraestructura;
@@ -40,7 +40,9 @@ usar los productos de Google Cloud.
   interior de otro: se llaman por sus funciones públicas. Así, si algún día hace falta separar un
   servicio, el corte ya está hecho.
 - **Una sola base: PostgreSQL.** Migraciones numeradas `NNN_nombre.sql` en `backend/db/postgres/`;
-  un archivo ya aplicado no se edita, cada cambio va en uno nuevo.
+  un archivo ya aplicado no se edita, cada cambio va en uno nuevo. Las aplica la app
+  (`app/base/migraciones.py`, con candado advisory) al arrancar o, si la base estaba caída, antes de
+  la primera consulta. Los módulos consultan con `ConexionPostgres.fetch/fetchrow/execute`.
 - `GET /api/v1/health` no consulta la base: una base caída no debe reiniciar el contenedor.
   `GET /api/v1/health/dependencias` sí, con 2 s de timeout (SPEC-0001 D-01).
 - **Solo `app/base` importa `asyncpg`.** Todo módulo que use un driver traduce sus errores de
@@ -59,13 +61,17 @@ usar los productos de Google Cloud.
   (`sni_hostname`) → sin redirecciones, sin proxies del entorno, tope de 1 MB descomprimido. **Sin
   `EGRESOS_CONFIG` no sale nada** (SPEC-0004 D-01). Las pruebas simulan las APIs con `MockTransport`
   y el DNS con `ResolutorFalso` (`tests/egresos_util.py`).
-- **Dependencias en un solo sentido:** `secretos → {egresos, inyeccion}`, `egresos → inyeccion`,
+- **Dependencias en un solo sentido:** `secretos → {egresos, inyeccion, aprobacion}`,
+  `egresos → {inyeccion, aprobacion}`, `aprobacion → {agentes, base, inyeccion}`,
   `inyeccion → agentes`; `app/agentes` (identidad, tokens, límite por minuto) no importa ningún
-  módulo. Desde otro módulo se importa solo `app.<modulo>`, nunca su interior
+  módulo. `inyeccion` avisa a `aprobacion` por un callback (`Contencion.al_cerrar`). Desde otro módulo se importa solo `app.<modulo>`, nunca su interior
   (`test_spec0004_sistema.py`).
 - **Contención (SPEC-0005):** el broker y el egreso web llaman a `Contencion` en orden fijo:
   sesión (`409` si es desconocida, falla cerrado) → autorizar (antes del límite y del envío) →
-  enviar → ingerir la respuesta (contamina por origen e inspecciona). Sin `INYECCION_CONFIG`
+  enviar → ingerir la respuesta (contamina por origen e inspecciona).
+- **Aprobación (SPEC-0006):** si la acción la pide, tras validar todo: `salida.revisar` (allowlist +
+  DLP sin enviar) → `Puerta.exigir` (sin boleto `202`, boleto válido sigue, si no `403`) → enviar.
+  Sin almacén, con base caída o `APROBACION_CONFIG` inválido, nunca se ejecuta (`403`/`503`). Sin `INYECCION_CONFIG`
   valen los valores por defecto: la contención no depende de que alguien la active.
 - **Secretos de terceros** (SPEC-0003): solo por variables de entorno, se retiran de `os.environ` al
   leerlos y nunca aparecen en logs, errores, `repr` ni respuestas. La imagen arranca con

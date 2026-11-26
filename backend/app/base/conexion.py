@@ -1,10 +1,13 @@
 """Pool de PostgreSQL. Solo `app/base` importa `asyncpg` (context.md §2, SPEC-0001 RF-05)."""
 
+import asyncio
 import logging
+from pathlib import Path
 from typing import Any
 
 import asyncpg
 
+from app.base.migraciones import CARPETA, aplicar
 from app.core.config import Settings
 from app.core.errores import ServicioNoDisponible
 
@@ -13,6 +16,10 @@ ERRORES_CONEXION = (asyncpg.PostgresError, asyncpg.InterfaceError, OSError)
 
 logger = logging.getLogger("agentguard.base")
 
+# Conectar a una base que no responde falla en este tiempo y no en los 60 s de asyncpg: una
+# acción que pide aprobación responde 503 pronto (SPEC-0006 D-01).
+TIMEOUT_CONEXION_S = 5.0
+
 
 class ConexionPostgres:
     """Implementa `core.salud.Dependencia`. Con `min_size=0` el pool no conecta al abrirse,
@@ -20,14 +27,20 @@ class ConexionPostgres:
 
     nombre = "postgres"
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, migraciones: Path = CARPETA) -> None:
         self._settings = settings
         self._pool: Any = None  # asyncpg.Pool; asyncpg no trae tipos
+        self._migraciones = migraciones
+        self._migrada = False
+        self._candado = asyncio.Lock()
 
     async def abrir(self) -> None:
         try:
             self._pool = await asyncpg.create_pool(
-                self._settings.database_url.get_secret_value(), min_size=0, max_size=10
+                self._settings.database_url.get_secret_value(),
+                min_size=0,
+                max_size=10,
+                timeout=TIMEOUT_CONEXION_S,
             )
         except (*ERRORES_CONEXION, ValueError) as error:
             # Ni una URL mal formada impide arrancar: el pool queda vacío y health/dependencias
@@ -47,3 +60,48 @@ class ConexionPostgres:
         if self._pool is not None:
             await self._pool.close()
             self._pool = None
+
+    # --- Consultas (SPEC-0006). Los módulos no ven asyncpg: reciben filas como dict y, si la base
+    # no responde, `ServicioNoDisponible` (503). Antes de la primera consulta se aplican las
+    # migraciones, por si la base estaba caída al arrancar.
+
+    async def migrar(self) -> list[str]:
+        """Aplica las migraciones pendientes una sola vez por proceso."""
+        async with self._candado:
+            if self._migrada:
+                return []
+            pool = self._exigir_pool()
+            try:
+                nuevas = await aplicar(pool, self._migraciones)
+            except ERRORES_CONEXION as error:
+                raise ServicioNoDisponible(self.nombre) from error
+            self._migrada = True
+            if nuevas:
+                logger.info("Migraciones aplicadas: %s", ", ".join(nuevas))
+            return nuevas
+
+    async def fetch(self, consulta: str, *argumentos: Any) -> list[dict[str, Any]]:
+        filas = await self._ejecutar("fetch", consulta, argumentos)
+        return [dict(fila) for fila in filas]
+
+    async def fetchrow(self, consulta: str, *argumentos: Any) -> dict[str, Any] | None:
+        fila = await self._ejecutar("fetchrow", consulta, argumentos)
+        return None if fila is None else dict(fila)
+
+    async def execute(self, consulta: str, *argumentos: Any) -> str:
+        resultado: str = await self._ejecutar("execute", consulta, argumentos)
+        return resultado
+
+    async def _ejecutar(self, metodo: str, consulta: str, argumentos: tuple[Any, ...]) -> Any:
+        if not self._migrada:
+            await self.migrar()
+        pool = self._exigir_pool()
+        try:
+            return await getattr(pool, metodo)(consulta, *argumentos)
+        except ERRORES_CONEXION as error:
+            raise ServicioNoDisponible(self.nombre) from error
+
+    def _exigir_pool(self) -> Any:
+        if self._pool is None:
+            raise ServicioNoDisponible(self.nombre)
+        return self._pool

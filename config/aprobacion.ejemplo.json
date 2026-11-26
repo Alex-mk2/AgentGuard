@@ -1,0 +1,7 @@
+{
+  "minutos_decision": 15,
+  "minutos_boleto": 5,
+  "max_pendientes_agente": 20,
+  "max_pendientes": 1000,
+  "notificar": "avisos.aprobacion"
+}

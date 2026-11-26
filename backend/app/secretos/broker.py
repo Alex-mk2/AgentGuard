@@ -17,6 +17,7 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel
 
 from app.agentes import Agente, RegistroAgentes
+from app.aprobacion import Motivo, Puerta, Rechazada
 from app.egresos import (
     Bloqueado,
     ErrorExterno,
@@ -75,10 +76,13 @@ class SecretBroker:
         salida: Salida,
         error: str | None = None,
         contencion: Contencion | None = None,
+        puerta: Puerta | None = None,
     ) -> None:
         self.config, self.fuente, self.agentes = config, fuente, agentes
         self.salida, self.error = salida, error
         self.contencion = contencion or Contencion()
+        # Sin puerta, lo que pide aprobación se niega (403): nunca se ejecuta sin ella.
+        self.puerta = puerta or Puerta(None)
         self._formas: tuple[bytes, ...] | None = None
 
     @property
@@ -105,8 +109,16 @@ class SecretBroker:
             raise ErrorBroker(error.codigo, error.detalle) from None
 
     async def ejecutar(
-        self, token: str | None, id_accion: str, cuerpo: Any, id_sesion: str | None = None
+        self,
+        token: str | None,
+        id_accion: str,
+        cuerpo: Any,
+        id_sesion: str | None = None,
+        boleto: str | None = None,
     ) -> RespuestaAccion:
+        """`boleto`: la cabecera `X-AgentGuard-Aprobacion` del reintento (SPEC-0006 E8). Si la
+        acción pide aprobación, lanza `Pendiente` (la ruta responde 202) o sigue con un boleto
+        válido."""
         if self.config is None:
             raise ErrorBroker(503, "Secret Broker no configurado")
         agente = self.agentes.identificar(token)
@@ -126,12 +138,20 @@ class SecretBroker:
                 [{"loc": ["body"], "msg": 'Se esperaba {"parametros": {...}}.', "type": "forma"}],
             )
         # SPEC-0005 E8, E10: fuera de la sesión o con efecto en una contaminada. Antes del límite
-        # y del envío: lo bloqueado no sale ni gasta cupo.
+        # y del envío: lo bloqueado no sale ni gasta cupo. SPEC-0006 E1: el efecto en una sesión
+        # contaminada pasa a pedir aprobación, salvo `aprobacion: nunca`.
+        motivo: Motivo | None = None
         try:
             self.contencion.autorizar_accion(sesion, accion.id, accion.metodo)
         except Contenida as error:
-            self._auditar(agente.id, accion.id, f"{error.codigo}-contencion", nivel=logging.WARNING)
-            raise ErrorBroker(error.codigo, error.detalle) from None
+            if error.motivo != "sesion_contaminada" or accion.aprobacion == "nunca":
+                self._auditar(
+                    agente.id, accion.id, f"{error.codigo}-contencion", nivel=logging.WARNING
+                )
+                raise ErrorBroker(error.codigo, error.detalle) from None
+            motivo = Motivo("sesion_contaminada", error.origen)
+        if motivo is None and accion.aprobacion == "siempre":
+            motivo = Motivo("siempre")
         parametros = cuerpo.get("parametros", {})
         espera = self.agentes.permitir(agente)
         if espera is not None:
@@ -154,7 +174,14 @@ class SecretBroker:
         formas = await self.preparar()
         inicio = time.perf_counter()
         try:
-            respuesta = await self.salida.enviar(construir(accion, valores, secreto), agente.id)
+            peticion = construir(accion, valores, secreto)
+            if motivo is not None:
+                # SPEC-0006 E3: lo que igual no saldría se bloquea antes de pedir aprobación.
+                await self.salida.revisar(peticion, agente.id)
+                await self._aprobar(
+                    agente, sesion, accion.id, accion.metodo, valores, motivo, boleto
+                )
+            respuesta = await self.salida.enviar(peticion, agente.id)
         except DestinoAlterado:
             self._auditar(agente.id, accion.id, "destino-alterado", nivel=logging.ERROR)
             raise ErrorBroker(502, "La petición no coincide con el destino declarado") from None
@@ -193,6 +220,64 @@ class SecretBroker:
             estado=respuesta.estado, cabeceras=cabeceras, limpiado=limpiado, **campos
         )
 
+    async def _aprobar(
+        self,
+        agente: Agente,
+        sesion: Sesion,
+        id_accion: str,
+        metodo: str,
+        valores: Mapping[str, Any],
+        motivo: Motivo,
+        boleto: str | None,
+    ) -> None:
+        """La huella lleva los valores ya validados: el reintento debe pedir exactamente lo
+        aprobado (E8). `Pendiente` sube hasta la ruta, que responde 202."""
+        try:
+            await self.puerta.exigir(
+                agente.id,
+                sesion,
+                id_accion,
+                metodo,
+                {"accion": id_accion, "metodo": metodo, "valores": dict(valores)},
+                valores,
+                motivo,
+                boleto,
+            )
+        except Rechazada as error:
+            self._auditar(agente.id, id_accion, f"{error.codigo}-aprobacion", nivel=logging.WARNING)
+            raise ErrorBroker(error.codigo, error.detalle) from None
+
+    def problema_notificador(self, id_accion: str) -> str | None:
+        """SPEC-0006 E13: la acción de `notificar` debe existir, ser POST, no pedir aprobación y
+        recibir un único texto `texto`. `None` si sirve."""
+        if self.config is None:
+            return "`notificar` necesita el Secret Broker configurado"
+        accion = self.config.accion(id_accion)
+        if accion is None:
+            return f"`notificar` nombra una acción que no existe: «{id_accion}»"
+        if accion.metodo != "POST" or accion.aprobacion != "nunca":
+            return "la acción de `notificar` debe ser POST con `aprobacion: nunca`"
+        texto = accion.parametros.get("texto")
+        otros = [p for nombre, p in accion.parametros.items() if nombre != "texto"]
+        if texto is None or texto.tipo != "texto" or any(p.requerido for p in otros):
+            return "la acción de `notificar` debe recibir un parámetro de texto `texto`"
+        return None
+
+    async def notificar(self, id_accion: str, texto: str) -> None:
+        """SPEC-0006 E13: AgentGuard ejecuta la acción por su cuenta, sin agente ni sesión. Pasa
+        por la misma salida (allowlist, DLP); la respuesta no entra a ningún contexto."""
+        accion = None if self.config is None else self.config.accion(id_accion)
+        if accion is None:
+            raise ErrorBroker(503, "Acción de notificación no disponible")
+        valores = validar_parametros(accion, {"texto": texto})
+        secreto = None
+        if accion.secreto is not None:
+            secreto = await self.fuente.obtener(accion.secreto)
+            if secreto is None:
+                raise ErrorBroker(503, "La acción de notificación no tiene su secreto")
+        respuesta = await self.salida.enviar(construir(accion, valores, secreto), "agentguard")
+        self._auditar("agentguard", accion.id, f"notificacion-{respuesta.estado}")
+
     def estado(self) -> dict[str, Any]:
         """Para quien opera (E11, E15; SPEC-0004 E3). Nombres y si están cargados. Nunca valores."""
         if self.config is None:
@@ -229,6 +314,7 @@ class SecretBroker:
                     "secreto": a.secreto,
                     "host": urlsplit(a.url).hostname,
                     "bloqueada_por_egresos": a.id in bloqueadas,
+                    "aprobacion": a.aprobacion,
                     "disponible": (a.secreto is None or a.secreto in cargados)
                     and a.id not in bloqueadas,
                 }
@@ -280,6 +366,7 @@ def crear_broker(
     salida: Salida,
     http_local: bool = False,
     contencion: Contencion | None = None,
+    puerta: Puerta | None = None,
 ) -> SecretBroker:
     """Sin ruta, o con una configuración inválida, el broker queda apagado y AgentGuard arranca
     igual (RF-01). El error va al log y a `/estado`, sin valores. El registro de agentes queda
@@ -288,7 +375,13 @@ def crear_broker(
     if ruta is None:
         sin_agentes = RegistroAgentes([], entorno)
         return SecretBroker(
-            None, fuente, sin_agentes, salida, "SECRETOS_CONFIG no está definido", contencion
+            None,
+            fuente,
+            sin_agentes,
+            salida,
+            "SECRETOS_CONFIG no está definido",
+            contencion,
+            puerta,
         )
     try:
         config = cargar_configuracion(ruta)
@@ -301,10 +394,10 @@ def crear_broker(
     except ConfiguracionBrokerInvalida as error:
         logger.error("Secret Broker deshabilitado: %s", error)
         return SecretBroker(
-            None, fuente, RegistroAgentes([], entorno), salida, str(error), contencion
+            None, fuente, RegistroAgentes([], entorno), salida, str(error), contencion, puerta
         )
     agentes = RegistroAgentes(config.agentes, entorno)
     faltan = sorted({a.secreto for a in config.acciones if a.secreto} - fuente.nombres())
     if faltan:
         logger.warning("Secretos sin cargar: %s", ", ".join(faltan))
-    return SecretBroker(config, fuente, agentes, salida, contencion=contencion)
+    return SecretBroker(config, fuente, agentes, salida, contencion=contencion, puerta=puerta)

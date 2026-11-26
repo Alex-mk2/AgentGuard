@@ -2,6 +2,7 @@
 # datos privados no entra por olvido. Nunca agregar .env ni backend/tests.
 *
 !backend/app
+!backend/db/postgres/*.sql
 !backend/pyproject.toml
 !backend/requirements.txt
 !frontend/src

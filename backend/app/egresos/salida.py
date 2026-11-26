@@ -72,7 +72,10 @@ class Salida:
             return False
         return final.esquema == "https" and self.allowlist.permite(final.host, final.puerto)
 
-    async def enviar(self, peticion: PeticionSaliente, agente: str) -> RespuestaExterna:
+    async def revisar(self, peticion: PeticionSaliente, agente: str) -> str:
+        """Pasos 1 y 2 (allowlist y DLP) sin DNS ni envío; devuelve el host. Lo bloqueado lanza
+        `Bloqueado`. Lo usa la aprobación humana (SPEC-0006 E3) para no pedir que alguien apruebe
+        algo que igual no saldría; `enviar` lo vuelve a correr."""
         local = self._es_local(peticion.url)
         host = _host_crudo(peticion.url)
         if not local:
@@ -95,7 +98,11 @@ class Salida:
                 {"mensaje": "Salida bloqueada por DLP", "reglas": list(hallazgos.bloquean)},
                 hallazgos.bloquean,
             )
+        return host
 
+    async def enviar(self, peticion: PeticionSaliente, agente: str) -> RespuestaExterna:
+        host = await self.revisar(peticion, agente)
+        local = self._es_local(peticion.url)
         url, cabeceras = peticion.url, dict(peticion.cabeceras)
         extensiones: dict[str, Any] = {}
         if not local:
