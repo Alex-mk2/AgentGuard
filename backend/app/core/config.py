@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     # Contención de prompt injection (SPEC-0005). Opcional: sin archivo, valores por defecto.
     inyeccion_config: Path | None = None
 
+    # Human-in-the-Loop (SPEC-0006). Opcional: sin archivo, valores por defecto.
+    aprobacion_config: Path | None = None
+
     @property
     def origenes_frontend(self) -> list[str]:
         return [origen.strip() for origen in self.frontend_origin.split(",") if origen.strip()]

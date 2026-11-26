@@ -13,11 +13,11 @@ export function obtener(ruta: string, cabeceras?: Record<string, string>): Promi
 }
 
 /** POST de JSON con el mismo contrato que `obtener`. `cuerpo` ya viene serializado. */
-export function enviar(ruta: string, cuerpo: string): Promise<Respuesta> {
+export function enviar(ruta: string, cuerpo: string, cabeceras?: Record<string, string>): Promise<Respuesta> {
   return pedir(ruta, {
     method: "POST",
     body: cuerpo,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...cabeceras },
   });
 }
 

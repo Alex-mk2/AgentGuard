@@ -1,6 +1,13 @@
 // Enrutado mínimo por pathname (SPEC-0002 plan): lógica pura para probarla con node --test.
 
-export type Pagina = "estado" | "triada" | "secretos" | "egresos" | "inyeccion" | "no_encontrada";
+export type Pagina =
+  | "estado"
+  | "triada"
+  | "secretos"
+  | "egresos"
+  | "inyeccion"
+  | "aprobacion"
+  | "no_encontrada";
 
 export function paginaDe(ruta: string): Pagina {
   const limpia = ruta.replace(/\/+$/, "") || "/";
@@ -9,5 +16,6 @@ export function paginaDe(ruta: string): Pagina {
   if (limpia === "/modulos/secretos") return "secretos";
   if (limpia === "/modulos/egresos") return "egresos";
   if (limpia === "/modulos/inyeccion") return "inyeccion";
+  if (limpia === "/modulos/aprobacion") return "aprobacion";
   return "no_encontrada";
 }

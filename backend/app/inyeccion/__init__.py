@@ -11,6 +11,7 @@ from app.inyeccion.contencion import (
     crear_contencion,
 )
 from app.inyeccion.inspector import Resultado
+from app.inyeccion.normalizar import sanear
 from app.inyeccion.reglas import Tipo
 from app.inyeccion.rutas import router
 from app.inyeccion.sesiones import Sesion
@@ -24,4 +25,5 @@ __all__ = [
     "Tipo",
     "crear_contencion",
     "router",
+    "sanear",
 ]

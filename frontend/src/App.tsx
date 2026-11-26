@@ -1,3 +1,4 @@
+import { Aprobacion } from "./paginas/Aprobacion.tsx";
 import { Egresos } from "./paginas/Egresos.tsx";
 import { Estado } from "./paginas/Estado.tsx";
 import { Inyeccion } from "./paginas/Inyeccion.tsx";
@@ -25,6 +26,8 @@ export function App() {
         <Egresos />
       ) : pagina === "inyeccion" ? (
         <Inyeccion />
+      ) : pagina === "aprobacion" ? (
+        <Aprobacion />
       ) : pagina === "estado" ? (
         <Estado />
       ) : (

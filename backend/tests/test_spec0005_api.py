@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 
 from app.core.config import Settings
 from app.main import crear_app
+from tests.dobles.aprobaciones import AlmacenMemoria
 from tests.dobles.dependencias import DobleDependencia
 from tests.egresos_util import ResolutorFalso, escribir_egresos
 from tests.secretos_util import (
@@ -55,9 +56,13 @@ def configuracion() -> dict[str, Any]:
             "respuesta": "confiable",
         }
     )
+    # SPEC-0006: con `nunca` el efecto en una sesión contaminada conserva el 403 de E8, que es lo
+    # que prueba este archivo. El 202 con aprobación humana se prueba en test_spec0006_*.
+    datos["acciones"][0]["aprobacion"] = "nunca"
     soporte = datos["agentes"][0]
     soporte["acciones"].append("interno.estado")
     soporte["web"] = ["es.wikipedia.org", "eco.ejemplo"]
+    soporte["web_aprobacion"] = "nunca"
     soporte["max_por_minuto"] = 100
     return datos
 
@@ -85,6 +90,7 @@ def armar(
         entorno=entorno(),
         transporte_saliente=api.transporte,
         resolutor=ResolutorFalso(),
+        aprobaciones=AlmacenMemoria(),
     )
     return TestClient(app, raise_server_exceptions=False)
 

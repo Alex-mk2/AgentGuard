@@ -7,6 +7,7 @@ from fastapi import APIRouter, Body, Header, Path, Query, Request
 from fastapi.responses import JSONResponse
 
 from app.agentes import token_bearer
+from app.aprobacion import CABECERA_APROBACION, Pendiente
 from app.inyeccion import CABECERA_SESION
 from app.secretos.broker import ErrorBroker, RespuestaAccion, SecretBroker
 from app.secretos.catalogo import catalogo_mcp, manifiesto_triada
@@ -28,7 +29,7 @@ def _respuesta_error(error: ErrorBroker) -> JSONResponse:
 @router.post(
     "/acciones/{accion}",
     response_model=RespuestaAccion,
-    responses={401: {}, 403: {}, 409: {}, 422: {}, 429: {}, 502: {}, 503: {}, 504: {}},
+    responses={202: {}, 401: {}, 403: {}, 409: {}, 422: {}, 429: {}, 502: {}, 503: {}, 504: {}},
 )
 async def ejecutar(
     request: Request,
@@ -36,13 +37,21 @@ async def ejecutar(
     cuerpo: Annotated[Any, Body()] = None,
     authorization: Annotated[str | None, Header()] = None,
     sesion: Annotated[str | None, Header(alias=CABECERA_SESION, max_length=128)] = None,
+    aprobacion: Annotated[str | None, Header(alias=CABECERA_APROBACION, max_length=128)] = None,
 ) -> RespuestaAccion | JSONResponse:
     """El cuerpo se lee como JSON libre y el broker lo valida después de autenticar: un cliente sin
-    token recibe `401`, no detalles del esquema."""
+    token recibe `401`, no detalles del esquema. Si la acción pide aprobación humana, `202` con
+    la solicitud; el reintento lleva el boleto en `X-AgentGuard-Aprobacion` (SPEC-0006)."""
     try:
-        return await _broker(request).ejecutar(token_bearer(authorization), accion, cuerpo, sesion)
+        return await _broker(request).ejecutar(
+            token_bearer(authorization), accion, cuerpo, sesion, aprobacion
+        )
     except ErrorBroker as error:
         return _respuesta_error(error)
+    except Pendiente as pendiente:
+        return JSONResponse(
+            status_code=202, content=pendiente.contenido(), headers=pendiente.cabeceras()
+        )
 
 
 @router.get("/herramientas", responses={401: {}, 409: {}, 503: {}})

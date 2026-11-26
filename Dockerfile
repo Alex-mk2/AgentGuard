@@ -29,6 +29,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Misma estructura que el repo: config.py busca frontend/dist relativo al código.
 COPY backend/pyproject.toml ./
 COPY backend/app ./app
+# Migraciones NNN_nombre.sql: la app las aplica al arrancar o antes de la primera consulta (SPEC-0006).
+COPY backend/db ./db
 COPY --from=frontend /srv/frontend/dist /srv/frontend/dist
 
 RUN useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin agentguard

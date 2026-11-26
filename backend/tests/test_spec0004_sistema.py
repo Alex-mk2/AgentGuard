@@ -2,13 +2,16 @@
 ningún módulo entra al interior de otro (context.md §2).
 
 SPEC-0005 suma `inyeccion`: `secretos → {egresos, inyeccion}`, `egresos → inyeccion` e
-`inyeccion → agentes` (RF-03)."""
+`inyeccion → agentes` (RF-03).
+
+SPEC-0006 suma `aprobacion`: `secretos` y `egresos` la llaman, y ella solo usa `agentes`, `base` e
+`inyeccion` (RF-03). `inyeccion` no la conoce: le avisa por un callback al cerrar una sesión."""
 
 import ast
 from pathlib import Path
 
 APP = Path(__file__).resolve().parents[1] / "app"
-MODULOS = ("agentes", "egresos", "inyeccion", "secretos", "triada")
+MODULOS = ("agentes", "aprobacion", "egresos", "inyeccion", "secretos", "triada")
 
 
 def _importados(archivo: Path) -> set[str]:
@@ -23,11 +26,12 @@ def _importados(archivo: Path) -> set[str]:
 
 def test_spec0004_dependencias_en_un_sentido() -> None:
     prohibido = {
-        "agentes": {"egresos", "inyeccion", "secretos", "triada"},
+        "agentes": {"aprobacion", "egresos", "inyeccion", "secretos", "triada"},
+        "aprobacion": {"egresos", "secretos", "triada"},
         "egresos": {"secretos", "triada"},
-        "inyeccion": {"egresos", "secretos", "triada"},
+        "inyeccion": {"aprobacion", "egresos", "secretos", "triada"},
         "secretos": {"triada"},
-        "triada": {"agentes", "egresos", "inyeccion", "secretos"},
+        "triada": {"agentes", "aprobacion", "egresos", "inyeccion", "secretos"},
     }
     infractores = []
     for modulo, vetados in prohibido.items():

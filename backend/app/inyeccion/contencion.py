@@ -8,7 +8,7 @@ import asyncio
 import json
 import logging
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -33,11 +33,17 @@ METODOS_SIN_EFECTO = frozenset({"GET"})  # D-02
 
 
 class Contenida(Exception):
-    """Error que el broker y el egreso web traducen a su respuesta. Sin valores del agente."""
+    """Error que el broker y el egreso web traducen a su respuesta. Sin valores del agente.
 
-    def __init__(self, codigo: int, detalle: Any) -> None:
+    `motivo="sesion_contaminada"` (con `origen`) marca el único bloqueo que la aprobación humana
+    puede levantar (SPEC-0006 E1): el broker y el egreso web lo convierten en una solicitud."""
+
+    def __init__(
+        self, codigo: int, detalle: Any, motivo: str | None = None, origen: str | None = None
+    ) -> None:
         super().__init__(str(codigo))
         self.codigo, self.detalle = codigo, detalle
+        self.motivo, self.origen = motivo, origen
 
 
 SESION_DESCONOCIDA = Contenida(409, "Sesión desconocida: abre una nueva")
@@ -86,6 +92,10 @@ class Contencion:
         self._auditar(agente.id, sesion, "abierta")
         return sesion
 
+    def al_cerrar(self, aviso: Callable[[Sesion], None]) -> None:
+        """`aviso(sesion)` cuando una sesión se cierra o vence (SPEC-0006 E11)."""
+        self.sesiones.al_retirar.append(aviso)
+
     def cerrar(self, id_sesion: str, agente: Agente | None) -> bool:
         cerrada = self.sesiones.cerrar(id_sesion, None if agente is None else agente.id)
         if cerrada:
@@ -112,6 +122,8 @@ class Contencion:
                     "mensaje": "Sesión contaminada: acción con efecto bloqueada",
                     "origen": sesion.contaminacion.origen,
                 },
+                motivo="sesion_contaminada",
+                origen=sesion.contaminacion.origen,
             )
 
     def acciones_visibles(self, sesion: Sesion, acciones: Sequence[str]) -> list[str]:
@@ -152,6 +164,7 @@ class Contencion:
             resultado = self.inspector.inspeccionar(contenido, tipo, agente.acciones)
         for senal in (*resultado.senales, *resultado.observadas):
             self.contadores[senal.regla] += 1
+            sesion.senales[senal.regla] += senal.conteo
         if resultado.senales or resultado.observadas:
             self._auditar(
                 agente.id,
@@ -295,7 +308,7 @@ def tipo_de(content_type: str, cuerpo: Any = None) -> Tipo:
 
 
 def _corto(sesion: Sesion) -> str:
-    return sesion.id if sesion.implicita else f"{sesion.id[:8]}…"
+    return sesion.corta
 
 
 def _tamano(contenido: Any) -> int:

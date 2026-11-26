@@ -40,8 +40,8 @@ export const MODULOS: readonly Modulo[] = [
   {
     id: "aprobacion",
     nombre: "Human-in-the-Loop Gate",
-    descripcion: "Aprobación explícita antes de toda acción irreversible.",
-    estado: "pendiente",
-    ruta: null,
+    descripcion: "Aprobación explícita antes de toda acción irreversible o de una sesión contaminada.",
+    estado: "activo", // SPEC-0006
+    ruta: "/modulos/aprobacion",
   },
 ];
