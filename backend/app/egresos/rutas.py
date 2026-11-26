@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 from app.agentes import token_bearer
 from app.egresos.web import EgresoWeb, ErrorEgreso
+from app.inyeccion import CABECERA_SESION
 
 router = APIRouter(prefix="/egresos", tags=["egresos"])
 
@@ -16,15 +17,19 @@ def _egreso(request: Request) -> EgresoWeb:
     return egreso
 
 
-@router.post("/peticion", responses={401: {}, 403: {}, 422: {}, 429: {}, 502: {}, 503: {}, 504: {}})
+@router.post(
+    "/peticion",
+    responses={401: {}, 403: {}, 409: {}, 422: {}, 429: {}, 502: {}, 503: {}, 504: {}},
+)
 async def peticion(
     request: Request,
     cuerpo: Annotated[Any, Body()] = None,
     authorization: Annotated[str | None, Header()] = None,
+    sesion: Annotated[str | None, Header(alias=CABECERA_SESION, max_length=128)] = None,
 ) -> JSONResponse:
     """El cuerpo se lee como JSON libre y se valida después de autenticar."""
     try:
-        resultado = await _egreso(request).pedir(token_bearer(authorization), cuerpo)
+        resultado = await _egreso(request).pedir(token_bearer(authorization), cuerpo, sesion)
     except ErrorEgreso as error:
         return JSONResponse(
             status_code=error.codigo, content={"detail": error.detalle}, headers=error.cabeceras

@@ -18,6 +18,8 @@ from app.core.tope import TopePeticion
 from app.core.web import FrontendEstatico, frontend_disponible
 from app.egresos import EgresoWeb, Resolutor, Transporte, crear_salida
 from app.egresos import router as router_egresos
+from app.inyeccion import crear_contencion
+from app.inyeccion import router as router_inyeccion
 from app.secretos import crear_broker
 from app.secretos import router as router_secretos
 from app.triada import router as router_triada
@@ -48,13 +50,17 @@ def crear_app(
     salida = crear_salida(
         settings.egresos_config, resolutor, transporte_saliente, settings.secretos_http_local
     )
+    # La contención no conoce el registro de agentes: se crea antes y la comparten el broker y
+    # el egreso web (SPEC-0005 RF-03).
+    contencion = crear_contencion(settings.inyeccion_config)
     broker = crear_broker(
         settings.secretos_config,
         os.environ if entorno is None else entorno,
         salida,
         settings.secretos_http_local,
+        contencion,
     )
-    egreso_web = EgresoWeb(salida, broker.agentes)
+    egreso_web = EgresoWeb(salida, broker.agentes, contencion)
 
     @asynccontextmanager
     async def ciclo_de_vida(app: FastAPI) -> AsyncIterator[None]:
@@ -75,6 +81,8 @@ def crear_app(
     app.state.settings = settings
     app.state.broker = broker
     app.state.egreso_web = egreso_web
+    app.state.contencion = contencion
+    app.state.agentes = broker.agentes
     registrar_manejadores(app)
     # Orden: el último agregado envuelve a los demás. Tope adentro de CORS (el 413 sale con CORS) y
     # el registro de acceso afuera de todo (también registra los 413).
@@ -92,6 +100,7 @@ def crear_app(
     app.include_router(router_triada, prefix=PREFIJO_API)  # módulo 1 (SPEC-0002)
     app.include_router(router_secretos, prefix=PREFIJO_API)  # módulo 2 (SPEC-0003)
     app.include_router(router_egresos, prefix=PREFIJO_API)  # módulo 3 (SPEC-0004)
+    app.include_router(router_inyeccion, prefix=PREFIJO_API)  # módulo 4 (SPEC-0005)
 
     # Siempre al final: el frontend responde solo lo que ninguna ruta de la API tomó (RF-03).
     if frontend_disponible(settings.frontend_dist):

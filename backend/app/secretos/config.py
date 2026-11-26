@@ -92,6 +92,9 @@ class Accion(_Estricto):
     secreto: str | None = Field(default=None, pattern=NOMBRE_SECRETO)
     inyeccion: Inyeccion | None = None
     timeout_s: float = Field(default=10, gt=0, le=30)
+    # SPEC-0005 E7: por defecto la respuesta contamina la sesión (un issue o un correo los
+    # escribe cualquiera). `confiable` solo para servicios propios cuyo contenido controlas.
+    respuesta: Literal["confiable", "no_confiable"] = "no_confiable"
 
     @field_validator("parametros")
     @classmethod

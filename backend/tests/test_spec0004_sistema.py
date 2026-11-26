@@ -1,11 +1,14 @@
 """SPEC-0004, arquitectura: dependencias en un solo sentido (`secretos → egresos → agentes`) y
-ningún módulo entra al interior de otro (context.md §2)."""
+ningún módulo entra al interior de otro (context.md §2).
+
+SPEC-0005 suma `inyeccion`: `secretos → {egresos, inyeccion}`, `egresos → inyeccion` e
+`inyeccion → agentes` (RF-03)."""
 
 import ast
 from pathlib import Path
 
 APP = Path(__file__).resolve().parents[1] / "app"
-MODULOS = ("agentes", "egresos", "secretos", "triada")
+MODULOS = ("agentes", "egresos", "inyeccion", "secretos", "triada")
 
 
 def _importados(archivo: Path) -> set[str]:
@@ -20,10 +23,11 @@ def _importados(archivo: Path) -> set[str]:
 
 def test_spec0004_dependencias_en_un_sentido() -> None:
     prohibido = {
-        "agentes": {"egresos", "secretos", "triada"},
+        "agentes": {"egresos", "inyeccion", "secretos", "triada"},
         "egresos": {"secretos", "triada"},
+        "inyeccion": {"egresos", "secretos", "triada"},
         "secretos": {"triada"},
-        "triada": {"agentes", "egresos", "secretos"},
+        "triada": {"agentes", "egresos", "inyeccion", "secretos"},
     }
     infractores = []
     for modulo, vetados in prohibido.items():

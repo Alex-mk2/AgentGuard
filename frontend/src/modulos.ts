@@ -33,9 +33,9 @@ export const MODULOS: readonly Modulo[] = [
   {
     id: "inyeccion",
     nombre: "Contención de prompt injection",
-    descripcion: "Inspección en cada salto y ejecución aislada.",
-    estado: "pendiente",
-    ruta: null,
+    descripcion: "Inspección de lo que entra y sesiones contaminadas sin acciones con efecto.",
+    estado: "activo", // SPEC-0005
+    ruta: "/modulos/inyeccion",
   },
   {
     id: "aprobacion",

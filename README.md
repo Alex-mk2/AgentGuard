@@ -11,6 +11,7 @@ en contra de quien lo despliega.
 [Arquitectura](#arquitectura) · [Detector de la Tríada](#módulo-1-detector-de-la-tríada-letal) ·
 [Secret Broker](#módulo-2-secret-broker) ·
 [Control de egresos](#módulo-3-sealed-tools-y-control-de-egresos) ·
+[Contención](#módulo-4-contención-de-prompt-injection) ·
 [Puesta en marcha](#puesta-en-marcha) · [Calidad](#calidad-y-ci) · [Estructura](#estructura)
 
 ## El problema: la Tríada Letal
@@ -38,7 +39,7 @@ AgentGuard rompe la tríada en cada punto en vez de confiar en que el modelo se 
 | 1 | **Detector de la Tríada Letal** | Revisa el manifiesto de herramientas de un agente y alerta si reúne las tres condiciones. | ✅ Disponible |
 | 2 | **Secret Broker** | Inyecta las credenciales al ejecutar la acción; el modelo nunca ve el secreto. | ✅ Disponible |
 | 3 | **Sealed Tools y control de egresos (DLP)** | Herramientas acotadas y bloqueo (403) de cualquier destino fuera de la allowlist. | ✅ Disponible |
-| 4 | **Contención de prompt injection** | Inspección en cada salto (sesión, memoria, agente a agente) y ejecución aislada. | Pendiente |
+| 4 | **Contención de prompt injection** | Inspecciona lo que entra al contexto y deja sin acciones con efecto a la sesión que leyó contenido no confiable. | ✅ Disponible |
 | 5 | **Human-in-the-Loop Gate** | Aprobación explícita antes de toda acción irreversible. | Pendiente |
 
 Dónde actúa cada módulo sobre la tríada:
@@ -53,8 +54,8 @@ flowchart LR
 
     classDef listo fill:#1a7f37,color:#fff,stroke:#1a7f37
     classDef pendiente stroke-dasharray: 4 3
-    class M1,M2,M3 listo
-    class M4,M5 pendiente
+    class M1,M2,M3,M4 listo
+    class M5 pendiente
 ```
 
 ## Arquitectura
@@ -78,12 +79,15 @@ flowchart LR
             T["triada · módulo 1"]
             B["secretos · módulo 2"]
             E["egresos · módulo 3<br/>única salida de red"]
-            F["módulos 4 y 5"]
+            I["inyeccion · módulo 4<br/>sesiones · inspección"]
+            F["módulo 5"]
         end
     end
 
     S -.->|"readiness · 2 s"| DB[("PostgreSQL 16")]
     B --> E
+    B --> I
+    E --> I
     E -->|"allowlist · DLP · solo IP públicas"| X["APIs externas y web"]
 
     classDef pendiente stroke-dasharray: 4 3
@@ -101,6 +105,10 @@ flowchart LR
 | `GET /api/v1/secretos/herramientas` | Herramientas selladas del agente en formato MCP, o `?formato=triada` para el Detector (token de agente). |
 | `POST /api/v1/egresos/peticion` | Egreso controlado hacia la web: solo hosts de la allowlist del agente (token de agente). |
 | `GET /api/v1/egresos/estado` | Allowlist, reglas DLP y bloqueos desde el arranque, sin contenido (token de administración). |
+| `POST /api/v1/inyeccion/sesiones` | Abre una sesión, opcionalmente acotada a acciones y hosts (token de agente). |
+| `DELETE /api/v1/inyeccion/sesiones/{id}` | Cierra una sesión: el agente la suya, la administración cualquiera. |
+| `POST /api/v1/inyeccion/inspeccion` | Sanea, marca y envuelve contenido de memoria, otro agente o documentos; contamina la sesión (token de agente). |
+| `GET /api/v1/inyeccion/estado` | Reglas, sesiones contaminadas y bloqueos, sin contenido (token de administración). |
 
 Los errores tienen formato fijo `{"detail": ...}`: `422` entrada inválida (sin repetir el valor
 recibido), `413` cuerpo de más de 1 MB, `503` dependencia caída (reintentable) y `500` con un
@@ -241,9 +249,44 @@ flowchart LR
   Con `?formato=triada`, el mismo catálogo se analiza en el Detector como salida restringida.
 - **Egreso web:** un agente que necesita consultar sitios los pide a `POST /egresos/peticion`, solo
   hacia los hosts de su lista, sin credenciales ni cookies. La respuesta llega marcada como
-  `no_confiable`.
+  `no_confiable` y contamina la sesión (módulo 4).
 
 Pantalla de estado en `/modulos/egresos`.
+
+## Módulo 4: Contención de prompt injection
+
+Detectar una inyección con reglas es un freno útil, pero el atacante puede reescribir el texto hasta
+que ninguna calce. Por eso la garantía no está en detectarla, sino en **qué puede hacer el agente
+después de leerla**: AgentGuard sabe qué sesiones ingirieron contenido no confiable, y una sesión
+contaminada pierde las acciones con efecto.
+
+```mermaid
+flowchart LR
+    W["Web · correo · memoria<br/>otro agente · respuesta de una acción"] --> I["Inspección<br/>quita invisibles · marca señales<br/>envuelve como dato"]
+    I --> C["Sesión contaminada"]
+    C --> Q{"¿acción con efecto?<br/>POST, PUT, DELETE…"}
+    Q -->|sí| X["403 · módulo 5: aprobación humana"]
+    Q -->|"no, solo lectura"| OK["permitida · DLP y allowlist siguen"]
+```
+
+- **Contamina por el origen, no por las señales:** la respuesta del egreso web y la de cualquier
+  acción del broker (salvo las declaradas `"respuesta": "confiable"`) contaminan la sesión aunque
+  ninguna regla calce. Una inyección que nadie detecta tampoco llega a escribir hacia afuera.
+- **Sesiones:** el runtime abre una por tarea (`POST /inyeccion/sesiones`) y la manda en la cabecera
+  `X-AgentGuard-Sesion`; sin cabecera, el agente entero es una sola sesión. Un id desconocido
+  responde `409`: un reinicio nunca deja limpia una sesión contaminada. Al abrirla puede acotarse a
+  las acciones y hosts de la tarea.
+- **Inspección determinista**, sin IA ([ejemplo de configuración](config/inyeccion.ejemplo.json)):
+  quita siempre los caracteres invisibles (incluido el texto escondido en etiquetas Unicode) y marca
+  frases de secuestro, marcas de rol, llamadas a herramienta imitadas, imágenes que filtran datos por
+  la URL y texto oculto en HTML. Deshace los disfraces baratos: ancho completo, homoglifos, letras
+  separadas, entidades HTML. Cada regla marca, bloquea u observa; por defecto todas marcan.
+- **Envoltorio:** la respuesta trae `marcado`, el contenido entre delimitadores con un id aleatorio
+  para que el modelo lo trate como dato; un delimitador falso dentro del contenido se neutraliza.
+- **Los saltos que AgentGuard no ve** (memoria, mensajes de otro agente, documentos) se pasan por
+  `POST /inyeccion/inspeccion`, que también contamina la sesión.
+
+Pantalla de estado en `/modulos/inyeccion`.
 
 ## Puesta en marcha
 
@@ -302,9 +345,10 @@ backend/
     agentes/         identidad de los agentes y límite por minuto, compartidos por los módulos
     secretos/        módulo 2: config · fuentes · petición · broker · catálogo de herramientas
     egresos/         módulo 3: única salida de red · allowlist · DNS · DLP · limpieza · egreso web
+    inyeccion/       módulo 4: sesiones · contaminación · reglas de inspección · envoltorio
   tests/             unitarias con dobles; integración marcada `integracion`
 frontend/src/        React + TypeScript: página de estado y pantallas de los módulos
-config/              ejemplos de acciones del broker y de la allowlist de egresos
+config/              ejemplos de acciones del broker, allowlist de egresos y contención
 docs/specs/          especificación, plan y tareas de cada funcionalidad
 Dockerfile           imagen única (Node construye, Python sirve)
 docker-compose.yml   app + PostgreSQL local
