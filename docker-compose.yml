@@ -24,12 +24,15 @@ services:
       # SECRETOS_CONFIG: /srv/config/acciones.json
       # Control de egresos (SPEC-0004): sin este archivo no sale ninguna petición.
       # EGRESOS_CONFIG: /srv/config/egresos.json
+      # Contención (SPEC-0005): opcional; sin archivo, valores por defecto.
+      # INYECCION_CONFIG: /srv/config/inyeccion.json
     env_file:
       - path: .env
         required: false
     # volumes:
     #   - "./config/acciones.json:/srv/config/acciones.json:ro"
     #   - "./config/egresos.json:/srv/config/egresos.json:ro"
+    #   - "./config/inyeccion.json:/srv/config/inyeccion.json:ro"
     ports: ["127.0.0.1:${APP_PUERTO:-8000}:8000"]  # APP_PUERTO si el 8000 está ocupado
     # Endurecimiento (SPEC-0003 E17): solo lectura, sin capabilities y sin ganar privilegios.
     read_only: true

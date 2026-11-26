@@ -1,5 +1,6 @@
 import { Egresos } from "./paginas/Egresos.tsx";
 import { Estado } from "./paginas/Estado.tsx";
+import { Inyeccion } from "./paginas/Inyeccion.tsx";
 import { Secretos } from "./paginas/Secretos.tsx";
 import { Triada } from "./paginas/Triada.tsx";
 import { paginaDe } from "./rutas.ts";
@@ -22,6 +23,8 @@ export function App() {
         <Secretos />
       ) : pagina === "egresos" ? (
         <Egresos />
+      ) : pagina === "inyeccion" ? (
+        <Inyeccion />
       ) : pagina === "estado" ? (
         <Estado />
       ) : (

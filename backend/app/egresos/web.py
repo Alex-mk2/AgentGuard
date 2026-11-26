@@ -18,6 +18,7 @@ from app.egresos.hosts import Allowlist, EntradaAllowlist, HostInvalido, destino
 from app.egresos.limpieza import decodificar_cuerpo, limpiar, limpiar_cabeceras
 from app.egresos.modelos import Bloqueado, ErrorExterno, PeticionSaliente
 from app.egresos.salida import DESTINO_NO_PERMITIDO, Salida
+from app.inyeccion import Contencion, Contenida
 
 logger = logging.getLogger("agentguard.egresos")
 auditoria = logging.getLogger("agentguard.egresos.auditoria")
@@ -34,14 +35,29 @@ class ErrorEgreso(Exception):
         self.codigo, self.detalle, self.cabeceras = codigo, detalle, cabeceras or {}
 
 
+def _entradas(textos: tuple[str, ...]) -> list[EntradaAllowlist]:
+    """Las entradas de una sesión ya son del agente (validadas al abrirla); se parsean igual para
+    comparar en la misma forma (`host:443` y `host` son la misma)."""
+    entradas = []
+    for texto in textos:
+        try:
+            entradas.append(parsear_entrada(texto))
+        except HostInvalido:
+            continue
+    return entradas
+
+
 def _invalido(msg: str, campo: str | None = None) -> ErrorEgreso:
     loc = ["body", campo] if campo else ["body"]
     return ErrorEgreso(422, [{"loc": loc, "msg": msg, "type": "forma"}])
 
 
 class EgresoWeb:
-    def __init__(self, salida: Salida, registro: RegistroAgentes) -> None:
+    def __init__(
+        self, salida: Salida, registro: RegistroAgentes, contencion: Contencion | None = None
+    ) -> None:
         self.salida, self.registro = salida, registro
+        self.contencion = contencion or Contencion()
         self._permitidos: dict[str, Allowlist] = {}
         for agente in registro.definiciones.values():
             entradas: list[EntradaAllowlist] = []
@@ -64,17 +80,31 @@ class EgresoWeb:
     def permitidos(self, agente: Agente) -> Allowlist:
         return self._permitidos.get(agente.id, Allowlist())
 
-    async def pedir(self, token: str | None, cuerpo: Any) -> dict[str, Any]:
+    async def pedir(
+        self, token: str | None, cuerpo: Any, id_sesion: str | None = None
+    ) -> dict[str, Any]:
         if self.salida.error is not None:
             raise ErrorEgreso(503, "Control de egresos no configurado: toda salida está bloqueada")
         agente = self.registro.identificar(token)
         if agente is None:
             raise ErrorEgreso(401, "Token de agente inválido", {"WWW-Authenticate": "Bearer"})
+        try:
+            sesion = self.contencion.sesion(agente, id_sesion)  # SPEC-0005 E6
+        except Contenida as error:
+            raise ErrorEgreso(error.codigo, error.detalle) from None
         permitidos = self.permitidos(agente)
+        if sesion.hosts is not None:  # SPEC-0005 E11: solo los hosts de la sesión
+            de_sesion = {str(entrada) for entrada in _entradas(sesion.hosts)}
+            permitidos = Allowlist(tuple(e for e in permitidos.entradas if str(e) in de_sesion))
         if len(permitidos) == 0:
             self._auditar(agente.id, "", "403")
             raise ErrorEgreso(403, "Egreso web no permitido para este agente")
         metodo, url, datos = self._validar(cuerpo)
+        try:
+            self.contencion.autorizar_web(sesion, metodo)  # SPEC-0005 E8 (D-02)
+        except Contenida as error:
+            self._auditar(agente.id, "", f"{error.codigo}-contencion", nivel=logging.WARNING)
+            raise ErrorEgreso(error.codigo, error.detalle) from None
         espera = self.registro.permitir(agente)
         if espera is not None:
             self._auditar(agente.id, "", "429", nivel=logging.WARNING)
@@ -115,12 +145,22 @@ class EgresoWeb:
         cabeceras, cabeceras_tocadas = limpiar_cabeceras(respuesta.cabeceras, formas)
         limpiado = cuerpo_tocado or cabeceras_tocadas
         self._auditar(agente.id, final.host, str(respuesta.estado), inicio)
+        # SPEC-0005 E7: contamina siempre la sesión; el cuerpo vuelve saneado y envuelto.
+        try:
+            campos = await self.contencion.ingerir_respuesta(
+                sesion,
+                agente,
+                "web",
+                decodificar_cuerpo(cuerpo_limpio, cabeceras),
+                cabeceras.get("content-type", ""),
+            )
+        except Contenida as error:
+            raise ErrorEgreso(error.codigo, error.detalle) from None
         return {
             "estado": respuesta.estado,
             "cabeceras": cabeceras,
-            **decodificar_cuerpo(cuerpo_limpio, cabeceras),
             "limpiado": limpiado,
-            "origen": "no_confiable",
+            **campos,
         }
 
     @staticmethod

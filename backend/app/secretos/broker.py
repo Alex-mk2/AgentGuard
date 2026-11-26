@@ -16,7 +16,7 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel
 
-from app.agentes import RegistroAgentes
+from app.agentes import Agente, RegistroAgentes
 from app.egresos import (
     Bloqueado,
     ErrorExterno,
@@ -26,6 +26,7 @@ from app.egresos import (
     limpiar_cabeceras,
     variantes,
 )
+from app.inyeccion import Contencion, Contenida, Sesion
 from app.secretos.config import (
     ConfiguracionBroker,
     ConfiguracionBrokerInvalida,
@@ -59,6 +60,10 @@ class RespuestaAccion(BaseModel):
     cuerpo: Any = None
     cuerpo_base64: str | None = None
     limpiado: bool
+    # SPEC-0005: de dónde viene la respuesta, sus señales y el cuerpo envuelto (E3).
+    origen: str = "no_confiable"
+    inspeccion: dict[str, Any] | None = None
+    marcado: str | None = None
 
 
 class SecretBroker:
@@ -69,9 +74,11 @@ class SecretBroker:
         agentes: RegistroAgentes,
         salida: Salida,
         error: str | None = None,
+        contencion: Contencion | None = None,
     ) -> None:
         self.config, self.fuente, self.agentes = config, fuente, agentes
         self.salida, self.error = salida, error
+        self.contencion = contencion or Contencion()
         self._formas: tuple[bytes, ...] | None = None
 
     @property
@@ -91,12 +98,22 @@ class SecretBroker:
             self.salida.dlp.registrar_sensibles(self._formas)
         return self._formas
 
-    async def ejecutar(self, token: str | None, id_accion: str, cuerpo: Any) -> RespuestaAccion:
+    def sesion(self, agente: Agente, id_sesion: str | None) -> Sesion:
+        try:
+            return self.contencion.sesion(agente, id_sesion)
+        except Contenida as error:
+            raise ErrorBroker(error.codigo, error.detalle) from None
+
+    async def ejecutar(
+        self, token: str | None, id_accion: str, cuerpo: Any, id_sesion: str | None = None
+    ) -> RespuestaAccion:
         if self.config is None:
             raise ErrorBroker(503, "Secret Broker no configurado")
         agente = self.agentes.identificar(token)
         if agente is None:
             raise ErrorBroker(401, "Token de agente inválido", {"WWW-Authenticate": "Bearer"})
+        # SPEC-0005: la sesión antes que nada, para no revelar nada con una ajena (409).
+        sesion = self.sesion(agente, id_sesion)
         accion = self.config.accion(id_accion)
         # 403 exista o no la acción: no se revela qué acciones hay (E5).
         if accion is None or id_accion not in agente.acciones:
@@ -108,6 +125,13 @@ class SecretBroker:
                 422,
                 [{"loc": ["body"], "msg": 'Se esperaba {"parametros": {...}}.', "type": "forma"}],
             )
+        # SPEC-0005 E8, E10: fuera de la sesión o con efecto en una contaminada. Antes del límite
+        # y del envío: lo bloqueado no sale ni gasta cupo.
+        try:
+            self.contencion.autorizar_accion(sesion, accion.id, accion.metodo)
+        except Contenida as error:
+            self._auditar(agente.id, accion.id, f"{error.codigo}-contencion", nivel=logging.WARNING)
+            raise ErrorBroker(error.codigo, error.detalle) from None
         parametros = cuerpo.get("parametros", {})
         espera = self.agentes.permitir(agente)
         if espera is not None:
@@ -153,11 +177,20 @@ class SecretBroker:
             nivel=logging.WARNING if limpiado else logging.INFO,
             limpiado=limpiado,
         )
+        # SPEC-0005 E7: la respuesta contamina la sesión salvo `respuesta: confiable`.
+        try:
+            campos = await self.contencion.ingerir_respuesta(
+                sesion,
+                agente,
+                "herramienta",
+                decodificar_cuerpo(cuerpo, cabeceras),
+                cabeceras.get("content-type", ""),
+                confiable=accion.respuesta == "confiable",
+            )
+        except Contenida as error:
+            raise ErrorBroker(error.codigo, error.detalle) from None
         return RespuestaAccion(
-            estado=respuesta.estado,
-            cabeceras=cabeceras,
-            limpiado=limpiado,
-            **decodificar_cuerpo(cuerpo, cabeceras),
+            estado=respuesta.estado, cabeceras=cabeceras, limpiado=limpiado, **campos
         )
 
     def estado(self) -> dict[str, Any]:
@@ -246,6 +279,7 @@ def crear_broker(
     entorno: Mapping[str, str],
     salida: Salida,
     http_local: bool = False,
+    contencion: Contencion | None = None,
 ) -> SecretBroker:
     """Sin ruta, o con una configuración inválida, el broker queda apagado y AgentGuard arranca
     igual (RF-01). El error va al log y a `/estado`, sin valores. El registro de agentes queda
@@ -253,7 +287,9 @@ def crear_broker(
     fuente = FuenteEntorno(entorno)
     if ruta is None:
         sin_agentes = RegistroAgentes([], entorno)
-        return SecretBroker(None, fuente, sin_agentes, salida, "SECRETOS_CONFIG no está definido")
+        return SecretBroker(
+            None, fuente, sin_agentes, salida, "SECRETOS_CONFIG no está definido", contencion
+        )
     try:
         config = cargar_configuracion(ruta)
         for accion in config.acciones:
@@ -264,9 +300,11 @@ def crear_broker(
                 )
     except ConfiguracionBrokerInvalida as error:
         logger.error("Secret Broker deshabilitado: %s", error)
-        return SecretBroker(None, fuente, RegistroAgentes([], entorno), salida, str(error))
+        return SecretBroker(
+            None, fuente, RegistroAgentes([], entorno), salida, str(error), contencion
+        )
     agentes = RegistroAgentes(config.agentes, entorno)
     faltan = sorted({a.secreto for a in config.acciones if a.secreto} - fuente.nombres())
     if faltan:
         logger.warning("Secretos sin cargar: %s", ", ".join(faltan))
-    return SecretBroker(config, fuente, agentes, salida)
+    return SecretBroker(config, fuente, agentes, salida, contencion=contencion)

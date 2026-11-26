@@ -1,0 +1,12 @@
+{
+  "modos": {
+    "iny.rol": "marcar",
+    "iny.instruccion": "marcar",
+    "iny.herramienta": "marcar"
+  },
+  "marcadores": ["canario-cambia-este-valor"],
+  "origenes_confiables": {
+    "soporte": []
+  },
+  "ttl_minutos": 30
+}

@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     # Control de egresos (SPEC-0004). Sin archivo, toda salida de red está bloqueada (D-01).
     egresos_config: Path | None = None
 
+    # Contención de prompt injection (SPEC-0005). Opcional: sin archivo, valores por defecto.
+    inyeccion_config: Path | None = None
+
     @property
     def origenes_frontend(self) -> list[str]:
         return [origen.strip() for origen in self.frontend_origin.split(",") if origen.strip()]

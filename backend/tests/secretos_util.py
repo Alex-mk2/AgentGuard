@@ -77,6 +77,22 @@ def entorno(**extra: str) -> dict[str, str]:
 Manejador = Callable[[httpx.Request], httpx.Response]
 
 
+def sesion_nueva(cliente: Any, token: str = TOKEN_SOPORTE) -> dict[str, str]:
+    """Cabeceras con una sesión limpia (SPEC-0005 E6).
+
+    Desde SPEC-0005, la respuesta de una acción contamina la sesión y la siguiente acción con
+    efecto (`POST`) de la misma sesión responde `403`. Las pruebas que repiten un `POST`
+    abren una sesión por llamada, como un runtime que abre una por tarea."""
+    respuesta = cliente.post(
+        "/api/v1/inyeccion/sesiones", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert respuesta.status_code == 201, respuesta.text
+    return {
+        "Authorization": f"Bearer {token}",
+        "X-AgentGuard-Sesion": respuesta.json()["sesion"],
+    }
+
+
 class ApiFalsa:
     """API externa simulada: guarda cada petición recibida y responde con `manejador`."""
 

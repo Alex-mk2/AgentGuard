@@ -30,6 +30,7 @@ from tests.secretos_util import (
     config,
     entorno,
     escribir,
+    sesion_nueva,
 )
 
 RUTA = "/api/v1/secretos/acciones/github.crear_issue"
@@ -81,12 +82,18 @@ def test_spec0003_e1_ejecuta_con_el_secreto_inyectado(
 ) -> None:
     respuesta = pedir(cliente_broker)
     assert respuesta.status_code == 200
-    assert respuesta.json() == {
+    cuerpo = respuesta.json()
+    # SPEC-0005 sumó `origen`, `inspeccion` y `marcado` (cambio intencional); `marcado` lleva
+    # un id aleatorio y se prueba en test_spec0005_*.
+    assert cuerpo.pop("marcado").count('{"number": 42}') == 1
+    assert cuerpo == {
         "estado": 201,
         "cabeceras": {"content-type": "application/json"},
         "cuerpo": {"number": 42},
         "cuerpo_base64": None,
         "limpiado": False,
+        "origen": "no_confiable",
+        "inspeccion": {"senales": [], "nivel": "ninguna", "saneado": False},
     }
     (enviada,) = api.recibidas
     # SPEC-0004: la conexión va a la IP ya verificada; el nombre viaja en Host y en el SNI.
@@ -121,7 +128,8 @@ def test_spec0003_e2_cuerpo_de_texto_y_binario(cliente_broker: TestClient, api: 
     api.manejador = lambda _: httpx.Response(200, text=f"eco {SECRETO}")
     assert pedir(cliente_broker).json()["cuerpo"] == "eco [SECRETO]"
     api.manejador = lambda _: httpx.Response(200, content=b"\xff\xfe" + SECRETO.encode())
-    cuerpo = pedir(cliente_broker).json()
+    # Otra sesión: la primera quedó contaminada por la respuesta (SPEC-0005, intencional).
+    cuerpo = pedir(cliente_broker, cabeceras=sesion_nueva(cliente_broker)).json()
     assert cuerpo["cuerpo_base64"] is not None and cuerpo["limpiado"]
 
 
@@ -243,9 +251,10 @@ def test_spec0003_e6_forma_del_cuerpo_422_despues_de_autenticar(cliente_broker: 
 
 
 def test_spec0003_e16_limite_por_agente_429(cliente_broker: TestClient, api: ApiFalsa) -> None:
+    # Una sesión por llamada: cada respuesta contamina la suya (SPEC-0005, intencional).
     for _ in range(5):  # max_por_minuto del agente soporte en la configuración de prueba
-        assert pedir(cliente_broker).status_code == 200
-    respuesta = pedir(cliente_broker)
+        assert pedir(cliente_broker, cabeceras=sesion_nueva(cliente_broker)).status_code == 200
+    respuesta = pedir(cliente_broker, cabeceras=sesion_nueva(cliente_broker))
     assert respuesta.status_code == 429
     assert 0 < int(respuesta.headers["retry-after"]) <= 60
     assert len(api.recibidas) == 5
