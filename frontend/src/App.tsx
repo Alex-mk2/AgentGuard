@@ -1,9 +1,10 @@
+import { Egresos } from "./paginas/Egresos.tsx";
 import { Estado } from "./paginas/Estado.tsx";
 import { Secretos } from "./paginas/Secretos.tsx";
 import { Triada } from "./paginas/Triada.tsx";
 import { paginaDe } from "./rutas.ts";
 
-/** Dos páginas: se eligen por la ruta (SPEC-0002 plan, sin react-router). El backend entrega
+/** Una página por módulo: se elige por la ruta (SPEC-0002 plan, sin react-router). El backend entrega
  * index.html en cualquier ruta que no sea de la API, así que recargar funciona (SPEC-0001 E13). */
 export function App() {
   const pagina = paginaDe(window.location.pathname);
@@ -19,6 +20,8 @@ export function App() {
         <Triada />
       ) : pagina === "secretos" ? (
         <Secretos />
+      ) : pagina === "egresos" ? (
+        <Egresos />
       ) : pagina === "estado" ? (
         <Estado />
       ) : (

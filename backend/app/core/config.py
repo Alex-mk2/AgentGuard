@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     # Solo desarrollo y pruebas: permite acciones http:// hacia localhost (E8).
     secretos_http_local: bool = False
 
+    # Control de egresos (SPEC-0004). Sin archivo, toda salida de red está bloqueada (D-01).
+    egresos_config: Path | None = None
+
     @property
     def origenes_frontend(self) -> list[str]:
         return [origen.strip() for origen in self.frontend_origin.split(",") if origen.strip()]

@@ -12,8 +12,9 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
+from app.agentes import Agente
+
 ID_ACCION = r"^[a-z0-9][a-z0-9._-]{0,63}$"
-ID_AGENTE = r"^[a-z0-9][a-z0-9_-]{0,63}$"
 NOMBRE_SECRETO = r"^[a-z0-9_]{1,64}$"
 NOMBRE_PARAMETRO = r"^[a-z][a-z0-9_]{0,63}$"
 CABECERA = r"^[A-Za-z0-9-]{1,64}$"
@@ -40,6 +41,7 @@ class Parametro(_Estricto):
     patron: str | None = Field(default=None, max_length=500)
     max_largo: int = Field(default=1000, ge=1, le=100_000)
     requerido: bool = True
+    descripcion: str | None = Field(default=None, max_length=300)  # va al inputSchema (SPEC-0004)
 
     @field_validator("patron")
     @classmethod
@@ -86,8 +88,9 @@ class Accion(_Estricto):
     metodo: Literal["GET", "POST", "PUT", "PATCH", "DELETE"]
     url: str = Field(max_length=2000)
     parametros: dict[str, Parametro] = Field(default_factory=dict, max_length=50)
-    secreto: str = Field(pattern=NOMBRE_SECRETO)
-    inyeccion: Inyeccion
+    # Sin secreto ni inyección: herramienta sellada sin credencial (SPEC-0004 E9).
+    secreto: str | None = Field(default=None, pattern=NOMBRE_SECRETO)
+    inyeccion: Inyeccion | None = None
     timeout_s: float = Field(default=10, gt=0, le=30)
 
     @field_validator("parametros")
@@ -98,8 +101,17 @@ class Accion(_Estricto):
                 raise ValueError("nombre de parámetro inválido: minúsculas, números y _")
         return parametros
 
+    @property
+    def nombre_mcp(self) -> str:
+        """Las APIs de modelos solo aceptan `[a-zA-Z0-9_-]{1,64}` como nombre de herramienta."""
+        return self.id.replace(".", "__")
+
     @model_validator(mode="after")
     def _url_fija(self) -> Self:
+        if (self.secreto is None) != (self.inyeccion is None):
+            raise ValueError("`secreto` e `inyeccion` van los dos o ninguno")
+        if len(self.nombre_mcp) > 64:
+            raise ValueError("el id es muy largo como herramienta MCP (cada `.` cuenta como `__`)")
         partes = urlsplit(self.url)
         if partes.scheme not in ("https", "http"):
             raise ValueError("la URL debe ser https (http solo hacia localhost en desarrollo)")
@@ -121,18 +133,16 @@ class Accion(_Estricto):
             raise ValueError("los huecos de la URL y los parámetros `en: ruta` no coinciden")
         if any(not self.parametros[nombre].requerido for nombre in de_ruta):
             raise ValueError("un parámetro de ruta debe ser requerido")
-        if self.inyeccion.query is not None and self.inyeccion.query in self._campos("query"):
+        if (
+            self.inyeccion is not None
+            and self.inyeccion.query is not None
+            and self.inyeccion.query in self._campos("query")
+        ):
             raise ValueError("la query del secreto choca con un parámetro")
         return self
 
     def _campos(self, lugar: str) -> set[str]:
         return {p.campo or nombre for nombre, p in self.parametros.items() if p.en == lugar}
-
-
-class Agente(_Estricto):
-    id: str = Field(pattern=ID_AGENTE)
-    acciones: list[str] = Field(max_length=200)
-    max_por_minuto: int = Field(default=30, ge=1, le=10_000)
 
 
 class ConfiguracionBroker(_Estricto):
@@ -147,6 +157,9 @@ class ConfiguracionBroker(_Estricto):
         agentes = [agente.id for agente in self.agentes]
         if len(agentes) != len(set(agentes)):
             raise ValueError("hay ids de agente repetidos")
+        nombres = [accion.nombre_mcp for accion in self.acciones]
+        if len(nombres) != len(set(nombres)):
+            raise ValueError("dos acciones dan el mismo nombre MCP (`a.b` y `a__b`)")
         conocidas = set(ids)
         for agente in self.agentes:
             if not set(agente.acciones) <= conocidas:

@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
+from app.agentes.limite import LimitePorAgente
 from app.arranque import puerto
 from app.core.endurecer import endurecer_proceso
-from app.secretos.limite import LimitePorAgente
 
 APP = Path(__file__).resolve().parents[1] / "app"
 
@@ -49,7 +49,8 @@ def test_spec0003_e17_puerto() -> None:
 
 
 def test_spec0003_httpx_solo_en_el_ejecutor() -> None:
-    permitido = APP / "secretos" / "ejecutor.py"
+    # SPEC-0004 RF-02: el ejecutor pasó a ser la salida única de `app/egresos` (cambio intencional).
+    permitido = APP / "egresos" / "salida.py"
     infractores = []
     for archivo in APP.rglob("*.py"):
         arbol = ast.parse(archivo.read_text(encoding="utf-8"))

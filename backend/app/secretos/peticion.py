@@ -5,15 +5,13 @@ la que decide a dónde va el secreto, se prueba sin red y sin cliente HTTP.
 """
 
 import re
-from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import quote, urlencode, urlsplit, urlunsplit
 
 from pydantic import SecretStr
 
+from app.egresos import PeticionSaliente, Valor
 from app.secretos.config import Accion
-
-Valor = str | int | bool
 
 
 class ParametrosInvalidos(Exception):
@@ -26,15 +24,6 @@ class ParametrosInvalidos(Exception):
 
 class DestinoAlterado(Exception):
     """La URL final no apunta al esquema, host y puerto declarados. No debería pasar nunca."""
-
-
-@dataclass(frozen=True)
-class PeticionSaliente:
-    metodo: str
-    url: str
-    cabeceras: dict[str, str] = field(repr=False)  # puede llevar el secreto: fuera del repr
-    json: dict[str, Valor] | None = None
-    timeout_s: float = 10
 
 
 def validar_parametros(accion: Accion, recibidos: Any) -> dict[str, Valor]:
@@ -79,7 +68,9 @@ def validar_parametros(accion: Accion, recibidos: Any) -> dict[str, Valor]:
     return validos
 
 
-def construir(accion: Accion, valores: dict[str, Valor], secreto: SecretStr) -> PeticionSaliente:
+def construir(
+    accion: Accion, valores: dict[str, Valor], secreto: SecretStr | None = None
+) -> PeticionSaliente:
     plantilla = urlsplit(accion.url)
     # Ruta: cada hueco es un segmento completo y su valor va codificado entero (`/`, `?`, `#`, `@`,
     # `..` incluidos), así un parámetro no puede salir de su segmento ni cambiar el host (E7).
@@ -104,12 +95,13 @@ def construir(accion: Accion, valores: dict[str, Valor], secreto: SecretStr) -> 
 
     # El secreto se reemplaza SOLO en el formato declarado de la inyección, nunca en los parámetros:
     # un parámetro que diga `{secreto}` se envía tal cual (E9).
-    inyectado = accion.inyeccion.formato.replace("{secreto}", secreto.get_secret_value())
     cabeceras = {"User-Agent": "AgentGuard-SecretBroker", "Accept": "application/json"}
-    if accion.inyeccion.cabecera is not None:
-        cabeceras[accion.inyeccion.cabecera] = inyectado
-    else:
-        query.append((accion.inyeccion.query or "", inyectado))
+    if accion.inyeccion is not None and secreto is not None:
+        inyectado = accion.inyeccion.formato.replace("{secreto}", secreto.get_secret_value())
+        if accion.inyeccion.cabecera is not None:
+            cabeceras[accion.inyeccion.cabecera] = inyectado
+        else:
+            query.append((accion.inyeccion.query or "", inyectado))
 
     url = urlunsplit(
         (plantilla.scheme, plantilla.netloc, ruta, urlencode(query, quote_via=quote), "")
@@ -119,6 +111,8 @@ def construir(accion: Accion, valores: dict[str, Valor], secreto: SecretStr) -> 
         metodo=accion.metodo,
         url=url,
         cabeceras=cabeceras,
+        # Para el DLP (SPEC-0004 H2): solo lo que puso el agente, nunca la credencial inyectada.
+        del_agente=tuple(_como_texto(valor) for valor in valores.values()),
         json=cuerpo or None,
         timeout_s=accion.timeout_s,
     )

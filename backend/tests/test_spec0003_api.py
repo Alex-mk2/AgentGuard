@@ -15,9 +15,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
+from app.egresos.salida import MAX_BYTES_RESPUESTA
 from app.main import crear_app
-from app.secretos.ejecutor import MAX_BYTES_RESPUESTA
 from tests.dobles.dependencias import DobleDependencia
+from tests.egresos_util import IP_GITHUB, ResolutorFalso, escribir_egresos
 from tests.secretos_util import (
     CONFIG,
     ECO_KEY,
@@ -50,8 +51,19 @@ def cliente_broker(
     caplog: pytest.LogCaptureFixture,
 ) -> Iterator[TestClient]:
     caplog.set_level(logging.DEBUG)  # se revisa que el secreto no esté en ningún log
-    settings = settings_prueba.model_copy(update={"secretos_config": escribir(tmp_path, CONFIG)})
-    app = crear_app(settings, [postgres], entorno=entorno(), transporte_saliente=api.transporte)
+    settings = settings_prueba.model_copy(
+        update={
+            "secretos_config": escribir(tmp_path, CONFIG),
+            "egresos_config": escribir_egresos(tmp_path),
+        }
+    )
+    app = crear_app(
+        settings,
+        [postgres],
+        entorno=entorno(),
+        transporte_saliente=api.transporte,
+        resolutor=ResolutorFalso(),
+    )
     with TestClient(app, raise_server_exceptions=False) as cliente:
         yield cliente
     assert SECRETO not in caplog.text, "el secreto apareció en un log"
@@ -77,7 +89,10 @@ def test_spec0003_e1_ejecuta_con_el_secreto_inyectado(
         "limpiado": False,
     }
     (enviada,) = api.recibidas
-    assert enviada.url == "https://api.github.com/repos/acme/web/issues"
+    # SPEC-0004: la conexión va a la IP ya verificada; el nombre viaja en Host y en el SNI.
+    assert enviada.url == f"https://{IP_GITHUB}/repos/acme/web/issues"
+    assert enviada.headers["host"] == "api.github.com"
+    assert enviada.extensions["sni_hostname"] == "api.github.com"
     assert enviada.headers["authorization"] == f"Bearer {SECRETO}"
     assert json.loads(enviada.content) == {"title": "Falla el login"}
 
@@ -252,8 +267,19 @@ def test_spec0003_e12_secreto_no_cargado_503(
 ) -> None:
     variables = entorno()
     del variables["AGENTGUARD_SECRETO_GITHUB_TOKEN"]
-    settings = settings_prueba.model_copy(update={"secretos_config": escribir(tmp_path, CONFIG)})
-    app = crear_app(settings, [postgres], entorno=variables, transporte_saliente=api.transporte)
+    settings = settings_prueba.model_copy(
+        update={
+            "secretos_config": escribir(tmp_path, CONFIG),
+            "egresos_config": escribir_egresos(tmp_path),
+        }
+    )
+    app = crear_app(
+        settings,
+        [postgres],
+        entorno=variables,
+        transporte_saliente=api.transporte,
+        resolutor=ResolutorFalso(),
+    )
     with TestClient(app) as cliente:
         assert pedir(cliente).status_code == 503
         estado = cliente.get(
@@ -293,7 +319,12 @@ def test_spec0003_e15_secreto_compartido_avisa(
 ) -> None:
     datos = config()
     datos["acciones"][1]["secreto"] = "github_token"
-    settings = settings_prueba.model_copy(update={"secretos_config": escribir(tmp_path, datos)})
+    settings = settings_prueba.model_copy(
+        update={
+            "secretos_config": escribir(tmp_path, datos),
+            "egresos_config": escribir_egresos(tmp_path),
+        }
+    )
     with TestClient(crear_app(settings, [postgres], entorno=entorno())) as cliente:
         estado = cliente.get(
             "/api/v1/secretos/estado", headers={"Authorization": f"Bearer {TOKEN_ADMIN}"}

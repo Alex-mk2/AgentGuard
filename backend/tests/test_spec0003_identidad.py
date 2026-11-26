@@ -2,9 +2,9 @@
 
 import pytest
 
-from app.secretos.config import Agente
+from app.agentes import Agente
+from app.agentes.identidad import Identidades, variable_de_agente
 from app.secretos.fuentes import FuenteEntorno
-from app.secretos.identidad import Identidades, variable_de_agente
 from tests.secretos_util import SECRETO, TOKEN_ADMIN, TOKEN_LECTOR, TOKEN_SOPORTE, entorno
 
 AGENTES = [Agente(id="soporte", acciones=[]), Agente(id="lector", acciones=[])]

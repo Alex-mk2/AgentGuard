@@ -1,4 +1,4 @@
-"""Tokens de agente y de administración (SPEC-0003 H2, RF-04, E4).
+"""Tokens de agente y de administración (SPEC-0003 H2, RF-04, E4; compartido desde SPEC-0004).
 
 Se guardan como SHA-256 y se comparan en tiempo constante contra **todos** los agentes, sin cortar
 al primero que calce: el tiempo de respuesta no dice si un agente existe. Los tokens son aleatorios
@@ -10,9 +10,9 @@ import hmac
 import logging
 from collections.abc import Mapping, MutableMapping, Sequence
 
-from app.secretos.config import Agente
+from app.agentes.modelo import Agente
 
-logger = logging.getLogger("agentguard.secretos")
+logger = logging.getLogger("agentguard.agentes")
 
 PREFIJO_AGENTE = "AGENTGUARD_AGENTE_"
 VARIABLE_ADMIN = "AGENTGUARD_ADMIN_TOKEN"

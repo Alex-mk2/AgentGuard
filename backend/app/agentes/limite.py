@@ -1,4 +1,4 @@
-"""Límite de peticiones por agente (SPEC-0003 E16, RF-09).
+"""Límite de peticiones por agente (SPEC-0003 E16, RF-09; SPEC-0004 E14: uno para todo).
 
 Ventana deslizante de 60 s en memoria: vale porque AgentGuard corre en un solo proceso (SPEC-0001).
 """

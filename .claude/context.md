@@ -23,7 +23,7 @@ proyecto separado; no se mezclan.
 |---|---|---|---|
 | 1 | Detector de la Tríada Letal ✅ | `app/triada` | Analiza el manifiesto de herramientas de un agente y alerta como crítico si combina datos privados + contenido no confiable + salida de red sin control de egresos. `POST /api/v1/triada/analisis`, pantalla `/modulos/triada` (SPEC-0002). |
 | 2 | Secret Broker ✅ | `app/secretos` | El LLM pide ejecutar una acción y el intermediario inyecta la API key o el token desde un vault en memoria al ejecutarla. **El secreto nunca entra en la ventana de contexto del modelo.** `POST /api/v1/secretos/acciones/{accion}`, `GET /api/v1/secretos/estado`, pantalla `/modulos/secretos` (SPEC-0003). |
-| 3 | Sealed Tools y control de egresos (DLP) | `app/egresos` | Envuelve las herramientas del agente (MCP o LangChain): el modelo solo elige entre funciones acotadas y no arma el payload crudo; cualquier salida fuera de la allowlist de dominios responde **403**. |
+| 3 | Sealed Tools y control de egresos (DLP) ✅ | `app/egresos` | Única salida de red: allowlist global, DLP determinista y solo IP públicas (conexión a la IP verificada). Herramientas selladas sin credencial y catálogo MCP del agente (`GET /api/v1/secretos/herramientas`); egreso web `POST /api/v1/egresos/peticion`; `GET /api/v1/egresos/estado`, pantalla `/modulos/egresos` (SPEC-0004). |
 | 4 | Contención de prompt injection y rogue actions | `app/inyeccion` | Inspecciona cada salto (sesión, memoria, agente a agente) y ejecuta en un sandbox con acceso desactivado por defecto. |
 | 5 | Human-in-the-Loop Gate | `app/aprobacion` | Pausa la ejecución y exige aprobación explícita (webhook o dashboard) ante toda acción irreversible o que modifique el plano de control. |
 
@@ -53,9 +53,15 @@ usar los productos de Google Cloud.
 - **Tope global de 1 MB por petición** (`core/tope.py`, `413`). Lo que viene de un agente o de un
   manifiesto es entrada hostil: límites de cantidad y profundidad en los modelos, y los errores
   `422` nunca reflejan el valor recibido (`include_input=False`).
-- **Red saliente solo en `app/secretos/ejecutor.py`** (único que importa `httpx`; lo verifica
-  `test_spec0003_httpx_solo_en_el_ejecutor`): sin redirecciones, sin proxies del entorno, tope de
-  1 MB y respuesta descomprimida antes de limpiarla. Las pruebas simulan las APIs con `MockTransport`.
+- **Red saliente solo en `app/egresos/salida.py`** (único que importa `httpx`; lo verifica
+  `test_spec0003_httpx_solo_en_el_ejecutor`). Orden fijo: allowlist → DLP sobre
+  `PeticionSaliente.del_agente` → DNS con todas las IP públicas → conexión a la IP verificada
+  (`sni_hostname`) → sin redirecciones, sin proxies del entorno, tope de 1 MB descomprimido. **Sin
+  `EGRESOS_CONFIG` no sale nada** (SPEC-0004 D-01). Las pruebas simulan las APIs con `MockTransport`
+  y el DNS con `ResolutorFalso` (`tests/egresos_util.py`).
+- **Dependencias en un solo sentido:** `secretos → egresos → agentes`; `app/agentes` (identidad,
+  tokens, límite por minuto) no importa ningún módulo. Desde otro módulo se importa solo
+  `app.<modulo>`, nunca su interior (`test_spec0004_sistema.py`).
 - **Secretos de terceros** (SPEC-0003): solo por variables de entorno, se retiran de `os.environ` al
   leerlos y nunca aparecen en logs, errores, `repr` ni respuestas. La imagen arranca con
   `python -m app.arranque` (sin shell), que desactiva *core dumps* y deja el proceso no *dumpable*;
