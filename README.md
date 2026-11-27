@@ -361,7 +361,7 @@ docker compose up --build        # http://localhost:8000
 
 Si el puerto 8000 o el 5434 están ocupados, cambia `APP_PUERTO` o `POSTGRES_PUERTO` en el `.env`.
 
-Para desarrollar (Python 3.12 y Node 24):
+Para desarrollar (Python 3.13 y Node 24):
 
 ```bash
 # backend

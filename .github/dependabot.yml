@@ -35,8 +35,10 @@ updates:
     schedule: { interval: weekly, day: monday }
     open-pull-requests-limit: 5
     ignore:
-      # El stack fija Python 3.12 y Node 24: solo parches y menores dentro de esa línea.
-      - dependency-name: python
-        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      # El stack fija Debian 13 (de ahí sale Python 3.13) y Node 24. La base distroless va fijada
+      # por digest: Dependabot propone el digest nuevo. Saltar a Debian 14 se hace a mano y junto
+      # con la distroless (mismo paquete de Python en las dos etapas).
+      - dependency-name: debian
+        update-types: ["version-update:semver-major"]
       - dependency-name: node
         update-types: ["version-update:semver-major"]
