@@ -142,7 +142,7 @@ class EgresoWeb:
         peticion = PeticionSaliente(
             metodo=metodo,
             url=url,
-            cabeceras={"User-Agent": "AgentGuard-Egresos", "Accept": "*/*"},
+            cabeceras={"Accept": "*/*"},  # el User-Agent lo pone la salida
             del_agente=tuple(del_agente),
             json=datos,
         )

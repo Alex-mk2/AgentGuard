@@ -63,7 +63,11 @@ def crear_app(
     puerta = crear_puerta(settings.aprobacion_config, aprobaciones or AlmacenPostgres(conexion))
     # Toda salida de red pasa por aquí (SPEC-0004 RF-02); el broker y el egreso web la comparten.
     salida = crear_salida(
-        settings.egresos_config, resolutor, transporte_saliente, settings.secretos_http_local
+        settings.egresos_config,
+        resolutor,
+        transporte_saliente,
+        settings.secretos_http_local,
+        entorno,
     )
     # La contención no conoce el registro de agentes: se crea antes y la comparten el broker y
     # el egreso web (SPEC-0005 RF-03).

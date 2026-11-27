@@ -13,10 +13,11 @@ from app.egresos.modelos import (
 )
 from app.egresos.red import Resolutor
 from app.egresos.rutas import router
-from app.egresos.salida import Salida, Transporte, crear_salida
+from app.egresos.salida import USER_AGENT_POR_DEFECTO, Salida, Transporte, crear_salida
 from app.egresos.web import EgresoWeb
 
 __all__ = [
+    "USER_AGENT_POR_DEFECTO",
     "Bloqueado",
     "EgresoWeb",
     "ErrorExterno",
