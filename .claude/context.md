@@ -61,6 +61,9 @@ usar los productos de Google Cloud.
   (`sni_hostname`) → sin redirecciones, sin proxies del entorno, tope de 1 MB descomprimido. **Sin
   `EGRESOS_CONFIG` no sale nada** (SPEC-0004 D-01). Las pruebas simulan las APIs con `MockTransport`
   y el DNS con `ResolutorFalso` (`tests/egresos_util.py`).
+  Todo lo que sale lleva un único User-Agent con contacto, lo pone la salida (nadie más):
+  `AgentGuard/<versión> (+https://github.com/Alex-mk2/AgentGuard)`, reemplazable con
+  `AGENTGUARD_USER_AGENT` (ASCII imprimible, máx. 200; si no, el de por defecto).
 - **Dependencias en un solo sentido:** `secretos → {egresos, inyeccion, aprobacion}`,
   `egresos → {inyeccion, aprobacion}`, `aprobacion → {agentes, base, inyeccion}`,
   `inyeccion → agentes`; `app/agentes` (identidad, tokens, límite por minuto) no importa ningún

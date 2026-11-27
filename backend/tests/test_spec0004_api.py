@@ -12,6 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
+from app.egresos import USER_AGENT_POR_DEFECTO
 from app.main import crear_app
 from tests.dobles.dependencias import DobleDependencia
 from tests.egresos_util import IP_WEB, ResolutorFalso, escribir_egresos
@@ -255,6 +256,20 @@ def test_spec0004_e12_egreso_web_permitido(cliente4: TestClient, api: ApiFalsa) 
     (enviada,) = api.recibidas
     assert enviada.url.host == IP_WEB and enviada.headers["host"] == "es.wikipedia.org"
     assert "authorization" not in enviada.headers and "cookie" not in enviada.headers
+
+
+def test_user_agent_unico_en_broker_y_egreso_web(cliente4: TestClient, api: ApiFalsa) -> None:
+    """Ni el broker ni el egreso web ponen su propio User-Agent: sale el de la salida única."""
+    assert issue(cliente4, "Falla el login").status_code == 200
+    api.manejador = lambda _: httpx.Response(200, text="ok")
+    respuesta = cliente4.post(
+        WEB, headers=INVESTIGADOR, json={"url": "https://es.wikipedia.org/wiki/Chile"}
+    )
+    assert respuesta.status_code == 200
+    assert [enviada.headers["user-agent"] for enviada in api.recibidas] == [
+        USER_AGENT_POR_DEFECTO,
+        USER_AGENT_POR_DEFECTO,
+    ]
 
 
 @pytest.mark.parametrize(
