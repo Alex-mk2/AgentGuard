@@ -1,0 +1,16 @@
+# Activa los módulos con la configuración local de config/*.json (copiada de los *.ejemplo.json).
+# Copiar a docker-compose.override.yml (ignorado por git): `docker compose up` lo suma solo.
+# Secretos y tokens van en el .env: AGENTGUARD_SECRETO_<NOMBRE>, AGENTGUARD_AGENTE_<ID> y
+# AGENTGUARD_ADMIN_TOKEN.
+services:
+  app:
+    environment:
+      SECRETOS_CONFIG: /srv/config/acciones.json      # Secret Broker (SPEC-0003)
+      EGRESOS_CONFIG: /srv/config/egresos.json        # sin este archivo no sale nada (SPEC-0004)
+      INYECCION_CONFIG: /srv/config/inyeccion.json    # opcional (SPEC-0005)
+      APROBACION_CONFIG: /srv/config/aprobacion.json  # opcional (SPEC-0006)
+    volumes:
+      - "./config/acciones.json:/srv/config/acciones.json:ro"
+      - "./config/egresos.json:/srv/config/egresos.json:ro"
+      - "./config/inyeccion.json:/srv/config/inyeccion.json:ro"
+      - "./config/aprobacion.json:/srv/config/aprobacion.json:ro"

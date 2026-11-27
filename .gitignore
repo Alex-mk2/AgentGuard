@@ -221,6 +221,11 @@ graphify-out/
 *.p12
 *.keystore
 secrets.*
+# Configuración local de los módulos: se copia de config/*.ejemplo.json (esos sí se versionan).
+config/*.json
+!config/*.ejemplo.json
+# Activación local de esos módulos en compose (plantilla: docker-compose.override.ejemplo.yml).
+docker-compose.override.yml
 credentials.json
 
 # Node / Next.js (frontend y skill report-pdf)
