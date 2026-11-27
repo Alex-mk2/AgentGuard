@@ -19,8 +19,10 @@ services:
     build: .
     environment:
       DATABASE_URL: postgresql://agentguard:${POSTGRES_PASSWORD:-agentguard}@db:5432/agentguard
-      # Secret Broker (SPEC-0003): descomentar y montar el archivo. Secretos y tokens van en el .env:
-      # AGENTGUARD_SECRETO_<NOMBRE>, AGENTGUARD_AGENTE_<ID> y AGENTGUARD_ADMIN_TOKEN.
+      # Módulos con config/*.json: copiar docker-compose.override.ejemplo.yml a
+      # docker-compose.override.yml (ignorado por git) o descomentar aquí. Secretos y tokens van
+      # en el .env: AGENTGUARD_SECRETO_<NOMBRE>, AGENTGUARD_AGENTE_<ID> y AGENTGUARD_ADMIN_TOKEN.
+      # Secret Broker (SPEC-0003):
       # SECRETOS_CONFIG: /srv/config/acciones.json
       # Control de egresos (SPEC-0004): sin este archivo no sale ninguna petición.
       # EGRESOS_CONFIG: /srv/config/egresos.json
