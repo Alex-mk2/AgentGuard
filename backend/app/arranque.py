@@ -11,6 +11,7 @@ import os
 import uvicorn
 
 from app.core.endurecer import endurecer_proceso
+from app.core.registro import configurar_logging
 
 logger = logging.getLogger("agentguard.arranque")
 
@@ -24,7 +25,7 @@ def puerto(entorno: dict[str, str] | None = None) -> int:
 
 def main() -> None:
     aplicado = endurecer_proceso()
-    logging.basicConfig(level=logging.INFO)
+    configurar_logging()
     logger.info("Proceso endurecido: %s", ", ".join(aplicado) or "nada (no es Linux)")
     uvicorn.run(
         "app.main:crear_app",

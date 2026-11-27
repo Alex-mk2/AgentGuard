@@ -49,7 +49,8 @@ usar los productos de Google Cloud.
   conexión a `ServicioNoDisponible` (`503`); `core` y `main` no conocen drivers. Lo verifica
   `test_spec0001_arquitectura.py`.
 - **Errores:** `{"detail": ...}`; base caída → `503` (reintentable); bug → `500` con `id_error`, traza
-  solo en el log (SPEC-0001 D-02). El log de acceso no registra IP ni query string.
+  solo en el log (SPEC-0001 D-02). El log de acceso no registra IP ni query string, y los
+  loggers `httpx` y `httpcore` van en WARNING: en INFO escriben la URL saliente con su query.
 - Cada módulo agrega su router en `crear_app()` bajo `/api/v1`, **antes** del montaje del frontend,
   y exporta desde su `__init__.py` solo lo público (`app/triada` es el patrón).
 - **Tope global de 1 MB por petición** (`core/tope.py`, `413`). Lo que viene de un agente o de un

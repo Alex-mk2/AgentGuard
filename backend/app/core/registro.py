@@ -11,8 +11,15 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 logger = logging.getLogger("agentguard.acceso")
 
 
+# Registran en INFO la URL completa de cada petición, con la query: puede traer un secreto
+# inyectado (SPEC-0003 RF-03, `inyeccion.query`) y los parámetros del agente.
+SILENCIADOS = ("httpx", "httpcore")
+
+
 def configurar_logging(nivel: str = "INFO") -> None:
     logging.basicConfig(level=nivel, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    for nombre in SILENCIADOS:
+        logging.getLogger(nombre).setLevel(logging.WARNING)
 
 
 class RegistroAcceso:
