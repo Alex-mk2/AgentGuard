@@ -95,7 +95,7 @@ def construir(
 
     # El secreto se reemplaza SOLO en el formato declarado de la inyección, nunca en los parámetros:
     # un parámetro que diga `{secreto}` se envía tal cual (E9).
-    cabeceras = {"User-Agent": "AgentGuard-SecretBroker", "Accept": "application/json"}
+    cabeceras = {"Accept": "application/json"}  # el User-Agent lo pone la salida
     if accion.inyeccion is not None and secreto is not None:
         inyectado = accion.inyeccion.formato.replace("{secreto}", secreto.get_secret_value())
         if accion.inyeccion.cabecera is not None:
