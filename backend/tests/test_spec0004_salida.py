@@ -13,7 +13,7 @@ import pytest
 
 from app.egresos.dlp import Dlp
 from app.egresos.modelos import Bloqueado, ErrorExterno, PeticionSaliente
-from app.egresos.salida import Salida, crear_salida
+from app.egresos.salida import USER_AGENT_POR_DEFECTO, Salida, crear_salida, user_agent
 from tests.egresos_util import IP_GITHUB, ResolutorFalso, escribir_egresos, salida_prueba
 
 TARJETA = "4111 1111 1111 1111"
@@ -218,3 +218,44 @@ def test_spec0004_e15_estado_sin_valores(tmp_path: Path) -> None:
     assert {"id": "dlp.rut", "modo": "observar"} in estado["reglas"]
     assert estado["marcadores"] == 1
     assert "canario-secreto-77" not in json.dumps(estado)
+
+
+# --- User-Agent único con contacto (Wikimedia bloquea a los clientes anónimos)
+
+
+def test_user_agent_por_defecto_lleva_version_y_contacto() -> None:
+    assert user_agent({}) == USER_AGENT_POR_DEFECTO
+    assert USER_AGENT_POR_DEFECTO.startswith("AgentGuard/")
+    assert "(+https://github.com/Alex-mk2/AgentGuard)" in USER_AGENT_POR_DEFECTO
+
+
+def test_user_agent_la_variable_lo_reemplaza() -> None:
+    assert user_agent({"AGENTGUARD_USER_AGENT": "MiBot/1.0 (ops@ejemplo.cl)"}) == (
+        "MiBot/1.0 (ops@ejemplo.cl)"
+    )
+
+
+@pytest.mark.parametrize(
+    "valor",
+    ["Bot/1.0\r\nX-Inyectada: 1", "Bot/1.0\nX: 1", "Bot\t1", "Bot/ñandú", "B" * 201],
+)
+def test_user_agent_invalido_usa_el_de_por_defecto_sin_repetirlo(
+    valor: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.WARNING)
+    assert user_agent({"AGENTGUARD_USER_AGENT": valor}) == USER_AGENT_POR_DEFECTO
+    assert "AGENTGUARD_USER_AGENT inválido" in caplog.text
+    assert valor not in caplog.text
+
+
+def test_user_agent_sale_en_la_peticion(tmp_path: Path) -> None:
+    destino = Destino()
+    salida = crear_salida(
+        escribir_egresos(tmp_path),
+        ResolutorFalso(),
+        destino.transporte,
+        entorno={"AGENTGUARD_USER_AGENT": "MiBot/1.0"},
+    )
+    assert enviar(salida, "https://api.github.com/") == 200
+    (enviada,) = destino.recibidas
+    assert enviada.headers["user-agent"] == "MiBot/1.0"

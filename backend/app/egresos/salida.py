@@ -8,18 +8,24 @@ Orden fijo, de lo más barato a lo más caro, y nada sale si un paso falla:
    valida contra el nombre del host (`sni_hostname`);
 5. envío como en SPEC-0003: sin redirecciones, sin proxies del entorno, tope de 1 MB sobre lo
    descomprimido. Los errores nunca llevan el mensaje de httpx (puede traer la URL con la query).
+
+Todo lo que sale lleva el mismo User-Agent, con contacto: algunas APIs (Wikimedia) bloquean a los
+clientes anónimos. `AGENTGUARD_USER_AGENT` lo reemplaza.
 """
 
 import asyncio
 import json
 import logging
+import os
 from collections import Counter
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, NoReturn
 from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
+from app.core.version import VERSION
 from app.egresos.config import ConfiguracionEgresosInvalida, cargar_configuracion
 from app.egresos.dlp import Dlp
 from app.egresos.hosts import Allowlist, HostInvalido, destino
@@ -32,11 +38,29 @@ DESTINO_NO_PERMITIDO = "Destino no permitido"
 # Más de esto, el DLP corre en un hilo: un cuerpo patológico de 1 MB no frena las demás peticiones.
 DLP_EN_HILO_DESDE = 65_536
 
+USER_AGENT_POR_DEFECTO = f"AgentGuard/{VERSION} (+https://github.com/Alex-mk2/AgentGuard)"
+MAX_USER_AGENT = 200
+
 # Alias para que el resto de la app tipe el transporte sin importar httpx.
 Transporte = httpx.AsyncBaseTransport
 
 logger = logging.getLogger("agentguard.egresos")
 auditoria = logging.getLogger("agentguard.egresos.auditoria")
+
+
+def user_agent(entorno: Mapping[str, str] | None = None) -> str:
+    """`AGENTGUARD_USER_AGENT` si es ASCII imprimible de hasta 200 caracteres (sin CR/LF: no se
+    puede inyectar otra cabecera); si no, el de por defecto. El aviso nunca repite el valor."""
+    valor = (os.environ if entorno is None else entorno).get("AGENTGUARD_USER_AGENT")
+    if valor is None or valor == "":
+        return USER_AGENT_POR_DEFECTO
+    if len(valor) > MAX_USER_AGENT or not all(" " <= letra <= "~" for letra in valor):
+        logger.warning(
+            "AGENTGUARD_USER_AGENT inválido (ASCII imprimible, máx. %d): se usa el de por defecto",
+            MAX_USER_AGENT,
+        )
+        return USER_AGENT_POR_DEFECTO
+    return valor
 
 
 class Salida:
@@ -48,6 +72,7 @@ class Salida:
         transporte: Transporte | None = None,
         http_local: bool = False,
         error: str | None = None,
+        agente_usuario: str = USER_AGENT_POR_DEFECTO,
     ) -> None:
         self.allowlist, self.dlp, self.error = allowlist, dlp, error
         self._resolutor = resolutor or ResolutorSistema()
@@ -55,7 +80,10 @@ class Salida:
         self.bloqueos: Counter[str] = Counter()
         self.observados: Counter[str] = Counter()
         self._cliente = httpx.AsyncClient(
-            transport=transporte, follow_redirects=False, trust_env=False
+            transport=transporte,
+            follow_redirects=False,
+            trust_env=False,
+            headers={"User-Agent": agente_usuario},
         )
 
     def _es_local(self, url: str) -> bool:
@@ -214,22 +242,27 @@ def crear_salida(
     resolutor: Resolutor | None = None,
     transporte: Transporte | None = None,
     http_local: bool = False,
+    entorno: Mapping[str, str] | None = None,
 ) -> Salida:
     """Sin archivo o con uno inválido, la allowlist queda vacía: **toda salida se bloquea** (D-01).
     AgentGuard arranca igual; el motivo va al log y a `/egresos/estado`, sin valores."""
+    agente_usuario = user_agent(entorno)
     if ruta is None:
         motivo = "EGRESOS_CONFIG no está definido: toda salida está bloqueada"
         logger.warning(motivo)
-        return Salida(Allowlist(), Dlp(), resolutor, transporte, http_local, motivo)
+        return Salida(Allowlist(), Dlp(), resolutor, transporte, http_local, motivo, agente_usuario)
     try:
         config = cargar_configuracion(ruta)
     except ConfiguracionEgresosInvalida as error:
         logger.error("Egresos sin configuración válida, toda salida bloqueada: %s", error)
-        return Salida(Allowlist(), Dlp(), resolutor, transporte, http_local, str(error))
+        return Salida(
+            Allowlist(), Dlp(), resolutor, transporte, http_local, str(error), agente_usuario
+        )
     return Salida(
         Allowlist(config.entradas),
         Dlp(config.dlp.modos, config.dlp.marcadores),
         resolutor,
         transporte,
         http_local,
+        agente_usuario=agente_usuario,
     )
