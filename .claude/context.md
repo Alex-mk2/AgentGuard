@@ -77,6 +77,10 @@ usar los productos de Google Cloud.
   leerlos y nunca aparecen en logs, errores, `repr` ni respuestas. La imagen arranca con
   `python -m app.arranque` (sin shell), que desactiva *core dumps* y deja el proceso no *dumpable*;
   se corre con `--read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges`.
+  La base final es **distroless** (`python3-debian13`, sin shell ni apt; usuario 65532): el venv se
+  arma en `debian` con el mismo paquete de Python. Por eso el backend va en **Python 3.13**, el de
+  Debian 13; las verificaciones de la capa `imagen` leen el contenido con `docker export` y el
+  proceso con `python`, nunca con `sh` ni `test`.
 - **Sin IA en las decisiones de seguridad** mientras puedan ser deterministas: un clasificador con
   LLM es atacable con la misma inyección que se busca detectar (SPEC-0002 D-02). Un modelo local
   podría sumar señales, nunca quitarlas.
@@ -107,7 +111,7 @@ La lógica se separa de los componentes para poder probarla así.
 ## 4. Stack
 | Capa | Elección |
 |---|---|
-| Backend | Python 3.12, FastAPI, Pydantic |
+| Backend | Python 3.13, FastAPI, Pydantic |
 | Frontend | React + Vite + TypeScript estricto, Node 24 |
 | Base de datos | PostgreSQL 16 |
 | Empaquetado | Una imagen Docker |

@@ -4,19 +4,19 @@
 [project]
 name = "agentguard"
 version = "0.1.0"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py313"
 line-length = 100
 
 [tool.ruff.lint]
-# E/F/W: errores base · I: orden de imports · B: bugs comunes · UP: sintaxis 3.12
+# E/F/W: errores base · I: orden de imports · B: bugs comunes · UP: sintaxis 3.13
 # ASYNC: bloqueos dentro de async · RUF: reglas propias de ruff
 select = ["E", "F", "W", "I", "B", "UP", "ASYNC", "RUF"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.13"
 strict = true
 plugins = ["pydantic.mypy"]
 files = ["app", "tests"]

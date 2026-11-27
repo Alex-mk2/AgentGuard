@@ -1,4 +1,4 @@
-# Dependencias de ejecución del backend (Python 3.12). Versiones fijadas para que todo el equipo y
+# Dependencias de ejecución del backend (Python 3.13). Versiones fijadas para que todo el equipo y
 # la imagen instalen exactamente lo mismo.
 
 # API

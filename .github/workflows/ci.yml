@@ -42,7 +42,7 @@ jobs:
         if: steps.check.outputs.exists == 'true'
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.12"
+          python-version: "3.13"
           cache: pip
           cache-dependency-path: backend/requirements*.txt
 
@@ -163,7 +163,7 @@ jobs:
         if: steps.check.outputs.exists == 'true'
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.12"
+          python-version: "3.13"
           cache: pip
           cache-dependency-path: backend/requirements*.txt
 
@@ -231,19 +231,36 @@ jobs:
           exit 1
 
       - name: Comprobar el contenido
+        # La imagen es distroless: no hay sh ni test adentro. El contenido se lee desde afuera con
+        # docker export y el proceso se revisa con el Python de la propia imagen.
         if: steps.check.outputs.exists == 'true'
         run: |
-          test "$(docker exec app id -u)" != "0"
-          docker exec app test ! -e /srv/.env
-          docker exec app test ! -e /srv/backend/tests
-          docker exec app test ! -e /srv/frontend/node_modules
-          docker exec app test ! -e /srv/frontend/src
-          docker exec app test -f /srv/frontend/dist/index.html
-          ! docker exec app sh -c "command -v node"   # la imagen final no lleva Node
-          # SPEC-0003 E17: sin core dumps y proceso no dumpable (otro proceso no lee su entorno).
-          docker exec app grep -E "^Max core file size +0 +0" /proc/1/limits
-          ! docker exec app cat /proc/1/environ
+          usuario="$(docker inspect -f '{{.Config.User}}' agentguard)"
+          test -n "$usuario" && test "$usuario" != "0" && test "$usuario" != "root"
           test "$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' app)" = "true"
+          docker export app | tar -t > contenido.txt
+          grep -qx 'srv/frontend/dist/index.html' contenido.txt
+          # `if grep` y no `! grep`: con set -e un comando negado nunca corta el paso.
+          if grep -E '^srv/(\.env|backend/tests|frontend/node_modules|frontend/src)(/|$)' contenido.txt; then
+            echo "::error::La imagen lleva archivos privados o de desarrollo"; exit 1
+          fi
+          # Sin shell, gestor de paquetes, Node ni pip en la imagen final.
+          if grep -E '(^|/)(sh|bash|dash|busybox|apt|apt-get|dpkg|node|pip|pip3)$' contenido.txt; then
+            echo "::error::La imagen lleva una shell, un gestor de paquetes, Node o pip"; exit 1
+          fi
+          # SPEC-0003 E17: no root, sin core dumps y proceso no dumpable (otro proceso no lee su entorno).
+          docker exec -i app python - <<'EOF'
+          import os, re
+          assert os.getuid() != 0, "corre como root"
+          limites = open("/proc/1/limits").read()
+          assert re.search(r"^Max core file size +0 +0", limites, re.M), "core dumps activos"
+          try:
+              open("/proc/1/environ").read()
+          except PermissionError:
+              pass
+          else:
+              raise SystemExit("el proceso es dumpable: su entorno se puede leer")
+          EOF
 
       - name: Sirve el frontend y la API
         # SPEC-0001 E10, E13 y E17: una sola imagen responde las dos cosas.
