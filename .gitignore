@@ -221,6 +221,9 @@ graphify-out/
 *.p12
 *.keystore
 secrets.*
+# Configuración local de los módulos: se copia de config/*.ejemplo.json (esos sí se versionan).
+config/*.json
+!config/*.ejemplo.json
 credentials.json
 
 # Node / Next.js (frontend y skill report-pdf)
