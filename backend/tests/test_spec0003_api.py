@@ -205,6 +205,22 @@ def test_spec0003_e9_query_con_secreto_no_se_refleja(
     assert respuesta.json()["limpiado"] is True
 
 
+def test_spec0003_rf02_secreto_en_query_no_llega_al_log(
+    cliente_broker: TestClient, api: ApiFalsa, caplog: pytest.LogCaptureFixture
+) -> None:
+    """httpx registra en INFO la URL completa, con la query: con `inyeccion.query` escribía el
+    secreto en el log. Su logger y el de httpcore quedan en WARNING."""
+    caplog.set_level(logging.DEBUG)
+    respuesta = cliente_broker.post(
+        "/api/v1/secretos/acciones/eco.query", json={"parametros": {"q": "hola"}}, headers=SOPORTE
+    )
+    assert respuesta.status_code == 200
+    assert len(api.recibidas) == 1 and ECO_KEY in str(api.recibidas[0].url)
+    assert caplog.records
+    assert all(ECO_KEY not in registro.getMessage() for registro in caplog.records)
+    assert not any(registro.name.startswith(("httpx", "httpcore")) for registro in caplog.records)
+
+
 @pytest.mark.parametrize(
     "cabeceras",
     [
