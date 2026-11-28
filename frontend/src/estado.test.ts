@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { interpretarDependencias, interpretarVersion } from "./estado.ts";
+import { cifrasSistema, interpretarDependencias, interpretarVersion, semaforoApi, tonoSistema } from "./estado.ts";
 import { MODULOS } from "./modulos.ts";
 
 test("spec0001_e11_todo_ok", () => {
@@ -50,4 +50,32 @@ test("spec0001_e11_los_5_modulos_y_su_estado", () => {
     MODULOS.filter((modulo) => modulo.estado === "activo").map((modulo) => modulo.id),
     ["triada", "secretos", "egresos", "inyeccion", "aprobacion"],
   );
+});
+
+test("diseno_punto_del_menu_segun_health", () => {
+  assert.equal(semaforoApi({ tipo: "ok", status: 200, cuerpo: { estado: "ok" } }), "ok");
+  assert.equal(semaforoApi({ tipo: "sin_respuesta" }), "caida");
+  assert.equal(semaforoApi({ tipo: "ok", status: 500, cuerpo: null }), "desconocido");
+});
+
+test("diseno_cifras_del_panel_de_inicio", () => {
+  const comprobando = cifrasSistema(null, null);
+  assert.deepEqual(comprobando.map((c) => c.valor), ["…", "…", "5/5", "—"]);
+  const caida = cifrasSistema({ api: "ok", postgres: "caida", mensaje: "" }, "1.2.0");
+  assert.deepEqual(
+    caida.map((c) => [c.id, c.valor, c.tono]),
+    [
+      ["api", "En línea", "permitir"],
+      ["postgres", "Caído", "bloquear"],
+      ["modulos", "5/5", "marca"],
+      ["version", "1.2.0", "neutro"],
+    ],
+  );
+});
+
+test("diseno_tono_de_la_linea_de_estado", () => {
+  assert.equal(tonoSistema(null), "neutro");
+  assert.equal(tonoSistema({ api: "ok", postgres: "ok", mensaje: "" }), "permitir");
+  assert.equal(tonoSistema({ api: "ok", postgres: "caida", mensaje: "" }), "alerta");
+  assert.equal(tonoSistema({ api: "caida", postgres: "desconocido", mensaje: "" }), "bloquear");
 });

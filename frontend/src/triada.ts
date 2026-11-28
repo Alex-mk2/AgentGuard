@@ -122,3 +122,17 @@ export function describirEvidencia(evidencia: Evidencia): string {
   const fragmento = evidencia.fragmento ? `: «${evidencia.fragmento}»` : "";
   return `${origen}${regla}${fragmento}`;
 }
+
+/** Qué significa cada pata, para mostrarlas antes de analizar. */
+export const DESCRIPCION_PATA: Record<Pata, string> = {
+  datos_privados: "Lee correos, archivos, bases o cualquier dato que no debería salir.",
+  no_confiable: "Ingiere web, documentos o mensajes que un tercero puede escribir.",
+  salida_externa: "Puede enviar datos afuera: webhooks, APIs, correo, peticiones HTTP.",
+};
+
+/** «2,4 KB de 1 MB»: cuánto pesa el manifiesto frente al tope del backend. */
+export function pesoManifiesto(texto: string): string {
+  const bytes = new TextEncoder().encode(texto).length;
+  const peso = bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1).replace(".", ",")} KB`;
+  return `${peso} de 1 MB`;
+}

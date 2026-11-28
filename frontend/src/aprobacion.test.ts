@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  cifras,
   cuerpoDecision,
   decididas,
   esRiesgosa,
+  estadoPuerta,
+  horaDe,
   interpretarDecision,
   interpretarEstado,
   interpretarSolicitudes,
@@ -14,8 +17,9 @@ import {
   pendientes,
   resumenBandeja,
   tiempoRestante,
+  tonoEstado,
 } from "./aprobacion.ts";
-import type { Solicitud } from "./aprobacion.ts";
+import type { EstadoAprobacion, Solicitud } from "./aprobacion.ts";
 
 function solicitud(estado: Solicitud["estado"], motivo: Solicitud["motivo"] = "sesion_contaminada"): Solicitud {
   return {
@@ -111,4 +115,48 @@ test("spec0006_e15_interpreta_el_estado", () => {
   };
   assert.deepEqual(interpretarEstado({ tipo: "ok", status: 200, cuerpo: estado }), { ok: true, valor: estado });
   assert.equal(interpretarEstado({ tipo: "ok", status: 200, cuerpo: { configurado: "si" } }).ok, false);
+});
+
+function estadoCon(contadores: Record<string, number> | null, configurado = true): EstadoAprobacion {
+  return { configurado, error: null, minutos_decision: 15, minutos_boleto: 5, notificar: null, contadores, avisos: [] };
+}
+
+test("diseno_verde_solo_para_lo_permitido_y_rojo_solo_para_lo_negado", () => {
+  assert.equal(tonoEstado("pendiente"), "alerta");
+  assert.equal(tonoEstado("aprobada"), "permitir");
+  assert.equal(tonoEstado("usada"), "permitir");
+  assert.equal(tonoEstado("negada"), "bloquear");
+  assert.equal(tonoEstado("vencida"), "neutro");
+  assert.equal(tonoEstado("cancelada"), "neutro");
+});
+
+test("diseno_cifras_salen_de_los_contadores_de_la_base", () => {
+  const lista = cifras(estadoCon({ pendiente: 2, aprobada: 1, usada: 2, negada: 1, vencida: 1, cancelada: 1 }), []);
+  assert.deepEqual(
+    lista.map((c) => [c.id, c.valor]),
+    [["pendientes", 2], ["aprobadas", 3], ["negadas", 1], ["cerradas", 2]],
+  );
+  assert.equal(lista[1]?.detalle, "2 ejecutadas");
+  assert.equal(lista[3]?.detalle, "1 por sesión cerrada");
+});
+
+test("diseno_cifras_sin_base_cuentan_la_lista", () => {
+  const lista = cifras(estadoCon(null), [solicitud("pendiente"), solicitud("usada"), solicitud("negada")]);
+  assert.deepEqual(lista.map((c) => c.valor), [1, 1, 1, 0]);
+  assert.equal(lista[1]?.detalle, "1 ejecutada");
+  assert.deepEqual(cifras(null, []).map((c) => c.valor), [0, 0, 0, 0]);
+});
+
+test("diseno_estado_de_la_puerta", () => {
+  assert.equal(estadoPuerta(estadoCon({})).tono, "permitir");
+  assert.equal(estadoPuerta(estadoCon(null)).tono, "alerta");
+  assert.equal(estadoPuerta(estadoCon({}, false)).tono, "bloquear");
+  assert.equal(estadoPuerta(null).tono, "neutro");
+});
+
+test("diseno_hora_de_la_decision_o_del_vencimiento", () => {
+  const local = new Date(2026, 10, 27, 20, 56).toISOString();
+  assert.equal(horaDe({ decidida: local, vence: "x" }), "20:56");
+  assert.equal(horaDe({ decidida: null, vence: new Date(2026, 10, 27, 9, 5).toISOString() }), "09:05");
+  assert.equal(horaDe({ decidida: null, vence: "no-es-fecha" }), "—");
 });

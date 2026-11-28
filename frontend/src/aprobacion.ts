@@ -1,7 +1,10 @@
 // Lógica pura de la bandeja de aprobación humana (SPEC-0006 E5–E7, E15), sin JSX ni DOM.
 
 import type { Respuesta } from "./api/cliente.ts";
+import type { Cifra, Tono } from "./diseno.ts";
 import { nombreOrigen } from "./inyeccion.ts";
+
+export type { Cifra, Tono };
 
 export type EstadoSolicitud = "pendiente" | "aprobada" | "negada" | "vencida" | "usada" | "cancelada";
 
@@ -180,4 +183,66 @@ function esEstado(cuerpo: unknown): cuerpo is EstadoAprobacion {
     (cuerpo["contadores"] === null || esObjeto(cuerpo["contadores"])) &&
     Array.isArray(cuerpo["avisos"])
   );
+}
+
+// ---------- Presentación (sistema de diseño Tactical Terminal) ----------
+
+const TONOS: Readonly<Record<EstadoSolicitud, Tono>> = {
+  pendiente: "alerta",
+  aprobada: "permitir",
+  usada: "permitir",
+  negada: "bloquear",
+  vencida: "neutro",
+  cancelada: "neutro",
+};
+
+export function tonoEstado(estado: EstadoSolicitud): Tono {
+  return TONOS[estado];
+}
+
+/** Las cuatro cifras de la bandeja. Salen de los contadores de la base (todo el historial); si la base no
+ * respondió, de la lista recibida, que solo trae las últimas decididas. */
+export function cifras(estado: EstadoAprobacion | null, solicitudes: readonly Solicitud[]): Cifra[] {
+  const cuenta = estado?.contadores ?? contarLista(solicitudes);
+  const de = (clave: EstadoSolicitud) => cuenta[clave] ?? 0;
+  const aprobadas = de("aprobada") + de("usada");
+  return [
+    { id: "pendientes", titulo: "Pendientes", valor: de("pendiente"), detalle: "esperan una decisión", tono: "alerta" },
+    {
+      id: "aprobadas",
+      titulo: "Aprobadas",
+      valor: aprobadas,
+      detalle: `${de("usada")} ${de("usada") === 1 ? "ejecutada" : "ejecutadas"}`,
+      tono: "permitir",
+    },
+    { id: "negadas", titulo: "Negadas", valor: de("negada"), detalle: "por una persona", tono: "bloquear" },
+    {
+      id: "cerradas",
+      titulo: "Vencidas",
+      valor: de("vencida") + de("cancelada"),
+      detalle: de("cancelada") ? `${de("cancelada")} por sesión cerrada` : "nadie decidió a tiempo",
+      tono: "neutro",
+    },
+  ];
+}
+
+function contarLista(solicitudes: readonly Solicitud[]): Record<string, number> {
+  const cuenta: Record<string, number> = {};
+  for (const s of solicitudes) cuenta[s.estado] = (cuenta[s.estado] ?? 0) + 1;
+  return cuenta;
+}
+
+/** La línea bajo el título: si la puerta está lista y si la base responde (E15). */
+export function estadoPuerta(estado: EstadoAprobacion | null): { texto: string; tono: Tono } {
+  if (estado === null) return { texto: "Sin datos de la puerta", tono: "neutro" };
+  if (!estado.configurado) return { texto: "Puerta sin configurar: nada se ejecuta", tono: "bloquear" };
+  if (estado.contadores === null) return { texto: "Puerta activa · base sin respuesta", tono: "alerta" };
+  return { texto: "Puerta activa · base conectada", tono: "permitir" };
+}
+
+/** «20:56» en la hora local: cuándo se decidió o, si nadie decidió, cuándo venció. */
+export function horaDe(solicitud: Pick<Solicitud, "decidida" | "vence">): string {
+  const fecha = new Date(solicitud.decidida ?? solicitud.vence);
+  if (Number.isNaN(fecha.getTime())) return "—";
+  return `${String(fecha.getHours()).padStart(2, "0")}:${String(fecha.getMinutes()).padStart(2, "0")}`;
 }

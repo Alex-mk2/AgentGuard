@@ -1,6 +1,8 @@
 // Lógica pura de la pantalla de contención de prompt injection (SPEC-0005 E12, E13), sin JSX ni DOM.
 
 import type { Respuesta } from "./api/cliente.ts";
+import type { Cifra, Tono } from "./diseno.ts";
+import { plural } from "./diseno.ts";
 
 export interface ReglaInyeccion {
   id: string;
@@ -120,4 +122,47 @@ export function sesionesOrdenadas(sesiones: readonly SesionEstado[]): SesionEsta
   return [...sesiones].sort(
     (a, b) => Number(b.contaminada) - Number(a.contaminada) || a.agente.localeCompare(b.agente),
   );
+}
+
+// ---------- Presentación ----------
+
+const TONO_MODO: Readonly<Record<ReglaInyeccion["modo"], Tono>> = {
+  bloquear: "bloquear",
+  marcar: "alerta",
+  observar: "neutro",
+};
+
+export function tonoModo(modo: ReglaInyeccion["modo"]): Tono {
+  return TONO_MODO[modo];
+}
+
+export function cifrasInyeccion(estado: EstadoInyeccion): Cifra[] {
+  const activas = estado.contadores["sesiones_activas"] ?? estado.sesiones.length;
+  const contaminadas = estado.contadores["sesiones_contaminadas"] ?? estado.sesiones.filter((s) => s.contaminada).length;
+  const detecciones = estado.reglas.reduce((total, regla) => total + regla.detecciones, 0);
+  const contenidas = totalBloqueos(estado);
+  return [
+    { id: "sesiones", titulo: "Sesiones activas", valor: activas, detalle: `cierran tras ${estado.ttl_minutos} min sin uso`, tono: "marca" },
+    {
+      id: "contaminadas",
+      titulo: "Contaminadas",
+      valor: contaminadas,
+      detalle: "solo lectura",
+      tono: contaminadas ? "alerta" : "neutro",
+    },
+    {
+      id: "detecciones",
+      titulo: "Detecciones",
+      valor: detecciones,
+      detalle: plural(estado.reglas.length, "regla activa", "reglas activas"),
+      tono: detecciones ? "alerta" : "neutro",
+    },
+    {
+      id: "contenidas",
+      titulo: "Acciones contenidas",
+      valor: contenidas,
+      detalle: "desde el arranque",
+      tono: contenidas ? "bloquear" : "neutro",
+    },
+  ];
 }

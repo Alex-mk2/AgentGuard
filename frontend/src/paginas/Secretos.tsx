@@ -1,8 +1,8 @@
 import { useState } from "react";
-import type { FormEvent } from "react";
 
 import { obtener } from "../api/cliente.ts";
-import { cabeceraAdmin, estadoAccion, interpretarEstado, resumen } from "../secretos.ts";
+import { AccesoAdmin, Cifras, Esqueleto, Ficha, TituloPagina, Vacio } from "../componentes.tsx";
+import { cabeceraAdmin, cifrasBroker, estadoAccion, interpretarEstado, resumen, tonoAccion } from "../secretos.ts";
 import type { EstadoBroker } from "../secretos.ts";
 
 /** Estado del Secret Broker (SPEC-0003 E11, E13). El token de administración vive solo en este
@@ -13,8 +13,7 @@ export function Secretos() {
   const [error, setError] = useState<string | null>(null);
   const [consultando, setConsultando] = useState(false);
 
-  async function consultar(evento: FormEvent) {
-    evento.preventDefault();
+  async function consultar() {
     const cabeceras = cabeceraAdmin(token);
     if (!cabeceras) {
       setError("Ingresa el token de administración.");
@@ -34,49 +33,44 @@ export function Secretos() {
 
   return (
     <>
-      <p>
-        <a href="/">← Estado del sistema</a>
-      </p>
-      <section aria-labelledby="titulo-secretos" className="tarjeta">
-        <h2 id="titulo-secretos">Secret Broker</h2>
-        <p className="ayuda">
-          El agente pide una acción por su nombre y AgentGuard inyecta la credencial al ejecutarla: el
-          modelo nunca la ve. Aquí se ven las acciones, los agentes y qué secretos están cargados, nunca
-          sus valores.
-        </p>
-        <form onSubmit={(evento) => void consultar(evento)} className="acciones">
-          <label htmlFor="token-admin" className="oculto">
-            Token de administración
-          </label>
-          <input
-            id="token-admin"
-            type="password"
-            className="campo"
-            autoComplete="off"
-            placeholder="Token de administración"
-            value={token}
-            onChange={(evento) => setToken(evento.target.value)}
-          />
-          <button type="submit" className="principal" disabled={consultando}>
-            {consultando ? "Consultando…" : "Consultar"}
-          </button>
-        </form>
-        {error && (
-          <p className="error" role="alert">
-            {error}
-          </p>
-        )}
-      </section>
+      <TituloPagina
+        titulo="Secret Broker"
+        bajada="El agente pide una acción por su nombre y AgentGuard inyecta la credencial al ejecutarla: el modelo nunca la ve. Aquí se ven acciones, agentes y qué secretos están cargados, nunca sus valores."
+      >
+        <AccesoAdmin
+          id="token-admin"
+          token={token}
+          setToken={setToken}
+          consultando={consultando}
+          cargado={estado !== null}
+          alEnviar={() => void consultar()}
+        />
+      </TituloPagina>
 
-      {estado && <VistaEstado estado={estado} />}
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+
+      {estado ? (
+        <VistaEstado estado={estado} />
+      ) : consultando ? (
+        <Esqueleto />
+      ) : (
+        !error && (
+          <Vacio icono="secretos" titulo="Ingresa el token para ver el broker">
+            Solo verás nombres y estados: los valores de los secretos nunca salen de AgentGuard.
+          </Vacio>
+        )
+      )}
     </>
   );
 }
 
 function VistaEstado({ estado }: { estado: EstadoBroker }) {
   return (
-    <section className="tarjeta" role="status" aria-labelledby="titulo-estado-broker">
-      <h2 id="titulo-estado-broker">{resumen(estado)}</h2>
+    <div role="status" aria-label={resumen(estado)}>
       {estado.error && <p className="error">{estado.error}</p>}
       {estado.avisos.map((aviso) => (
         <p key={aviso} className="aviso">
@@ -84,81 +78,92 @@ function VistaEstado({ estado }: { estado: EstadoBroker }) {
         </p>
       ))}
 
-      {estado.configurado && (
+      {!estado.configurado ? (
+        <Vacio icono="secretos" titulo="El Secret Broker no está configurado">
+          Sin <code>SECRETOS_CONFIG</code> no hay acciones que ejecutar.
+        </Vacio>
+      ) : (
         <>
-          <h3>Acciones</h3>
-          <table className="tabla">
-            <thead>
-              <tr>
-                <th scope="col">Acción</th>
-                <th scope="col">Destino</th>
-                <th scope="col">Secreto</th>
-                <th scope="col">Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {estado.acciones.map((accion) => (
-                <tr key={accion.id}>
-                  <td>
-                    <code>{accion.id}</code>
-                    {accion.descripcion && <div className="evidencia">{accion.descripcion}</div>}
-                  </td>
-                  <td>{accion.host ?? "—"}</td>
-                  <td>{accion.secreto ? <code>{accion.secreto}</code> : "sin credencial"}</td>
-                  <td>{estadoAccion(accion)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <Cifras cifras={cifrasBroker(estado)} etiqueta="Resumen del broker" />
 
-          <h3>Agentes</h3>
-          <table className="tabla">
-            <thead>
-              <tr>
-                <th scope="col">Agente</th>
-                <th scope="col">Acciones permitidas</th>
-                <th scope="col">Límite</th>
-                <th scope="col">Token</th>
-              </tr>
-            </thead>
-            <tbody>
-              {estado.agentes.map((agente) => (
-                <tr key={agente.id}>
-                  <td>
-                    <code>{agente.id}</code>
-                  </td>
-                  <td>{agente.acciones.join(", ") || "ninguna"}</td>
-                  <td>{agente.max_por_minuto}/min</td>
-                  <td>{agente.token_cargado ? "Cargado" : "Falta"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <section className="tarjeta" aria-labelledby="titulo-acciones">
+            <h2 id="titulo-acciones">Acciones</h2>
+            <div className="tabla-contenedor">
+              <table className="tabla">
+                <thead>
+                  <tr>
+                    <th scope="col">Acción</th>
+                    <th scope="col">Destino</th>
+                    <th scope="col">Secreto</th>
+                    <th scope="col">Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {estado.acciones.map((accion) => (
+                    <tr key={accion.id}>
+                      <td>
+                        <span className="mono">{accion.id}</span>
+                        {accion.descripcion && <div className="evidencia">{accion.descripcion}</div>}
+                      </td>
+                      <td className="mono suave">{accion.host ?? "—"}</td>
+                      <td>
+                        {accion.secreto ? (
+                          <span className="mono">{accion.secreto}</span>
+                        ) : (
+                          <span className="suave">sin credencial</span>
+                        )}
+                      </td>
+                      <td>
+                        <Ficha tono={tonoAccion(accion)}>{estadoAccion(accion)}</Ficha>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
 
-          <h3>Secretos</h3>
-          <table className="tabla">
-            <thead>
-              <tr>
-                <th scope="col">Nombre</th>
-                <th scope="col">Estado</th>
-                <th scope="col">Lo usan</th>
-              </tr>
-            </thead>
-            <tbody>
-              {estado.secretos.map((secreto) => (
-                <tr key={secreto.nombre}>
-                  <td>
-                    <code>{secreto.nombre}</code>
-                    {secreto.compartido && <span className="etiqueta">compartido</span>}
-                  </td>
-                  <td>{secreto.cargado ? "Cargado" : "Falta"}</td>
-                  <td>{secreto.acciones.join(", ")}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="columnas">
+            <section className="tarjeta" aria-labelledby="titulo-agentes">
+              <h2 id="titulo-agentes">Agentes</h2>
+              <ul className="lista-filas">
+                {estado.agentes.map((agente) => (
+                  <li key={agente.id}>
+                    <div className="lista-fila-cabecera">
+                      <span className="agente">{agente.id}</span>
+                      <span className="mono suave">{agente.max_por_minuto}/min</span>
+                      <Ficha tono={agente.token_cargado ? "permitir" : "alerta"}>
+                        {agente.token_cargado ? "Token cargado" : "Falta el token"}
+                      </Ficha>
+                    </div>
+                    <p className="evidencia">
+                      {agente.acciones.length ? agente.acciones.join(" · ") : "sin acciones permitidas"}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            <section className="tarjeta" aria-labelledby="titulo-secretos-lista">
+              <h2 id="titulo-secretos-lista">Secretos</h2>
+              <ul className="lista-filas">
+                {estado.secretos.map((secreto) => (
+                  <li key={secreto.nombre}>
+                    <div className="lista-fila-cabecera">
+                      <span className="mono">{secreto.nombre}</span>
+                      {secreto.compartido && <Ficha tono="neutro">compartido</Ficha>}
+                      <Ficha tono={secreto.cargado ? "permitir" : "alerta"}>
+                        {secreto.cargado ? "Cargado" : "Falta"}
+                      </Ficha>
+                    </div>
+                    <p className="evidencia">{secreto.acciones.join(" · ")}</p>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </div>
         </>
       )}
-    </section>
+    </div>
   );
 }
