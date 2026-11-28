@@ -36,9 +36,6 @@ export function Inyeccion() {
 
   return (
     <>
-      <p>
-        <a href="/">← Estado del sistema</a>
-      </p>
       <section aria-labelledby="titulo-inyeccion" className="tarjeta">
         <h2 id="titulo-inyeccion">Contención de prompt injection</h2>
         <p className="ayuda">

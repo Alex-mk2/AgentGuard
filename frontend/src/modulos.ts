@@ -3,6 +3,7 @@
 export interface Modulo {
   id: string;
   nombre: string;
+  corto: string; // etiqueta del menú lateral
   descripcion: string;
   estado: "pendiente" | "activo";
   ruta: string | null; // página del módulo, si ya tiene
@@ -12,6 +13,7 @@ export const MODULOS: readonly Modulo[] = [
   {
     id: "triada",
     nombre: "Detector de la Tríada Letal",
+    corto: "Tríada",
     descripcion: "Alerta si un agente combina datos privados, contenido no confiable y salida externa.",
     estado: "activo", // SPEC-0002
     ruta: "/modulos/triada",
@@ -19,6 +21,7 @@ export const MODULOS: readonly Modulo[] = [
   {
     id: "secretos",
     nombre: "Secret Broker",
+    corto: "Secretos",
     descripcion: "Inyecta credenciales al ejecutar; el modelo nunca ve el secreto.",
     estado: "activo", // SPEC-0003
     ruta: "/modulos/secretos",
@@ -26,6 +29,7 @@ export const MODULOS: readonly Modulo[] = [
   {
     id: "egresos",
     nombre: "Sealed Tools y control de egresos",
+    corto: "Egresos",
     descripcion: "Herramientas acotadas y bloqueo de destinos fuera de la allowlist.",
     estado: "activo", // SPEC-0004
     ruta: "/modulos/egresos",
@@ -33,6 +37,7 @@ export const MODULOS: readonly Modulo[] = [
   {
     id: "inyeccion",
     nombre: "Contención de prompt injection",
+    corto: "Inyección",
     descripcion: "Inspección de lo que entra y sesiones contaminadas sin acciones con efecto.",
     estado: "activo", // SPEC-0005
     ruta: "/modulos/inyeccion",
@@ -40,6 +45,7 @@ export const MODULOS: readonly Modulo[] = [
   {
     id: "aprobacion",
     nombre: "Human-in-the-Loop Gate",
+    corto: "Aprobación",
     descripcion: "Aprobación explícita antes de toda acción irreversible o de una sesión contaminada.",
     estado: "activo", // SPEC-0006
     ruta: "/modulos/aprobacion",

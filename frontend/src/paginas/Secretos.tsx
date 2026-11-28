@@ -34,9 +34,6 @@ export function Secretos() {
 
   return (
     <>
-      <p>
-        <a href="/">← Estado del sistema</a>
-      </p>
       <section aria-labelledby="titulo-secretos" className="tarjeta">
         <h2 id="titulo-secretos">Secret Broker</h2>
         <p className="ayuda">

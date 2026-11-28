@@ -3,7 +3,15 @@ import { test } from "node:test";
 
 import { EJEMPLO_TRIADA } from "./ejemplos/triada.ts";
 import { paginaDe } from "./rutas.ts";
-import { describirEvidencia, interpretarAnalisis, MAX_BYTES, prepararManifiesto } from "./triada.ts";
+import {
+  DESCRIPCION_PATA,
+  describirEvidencia,
+  interpretarAnalisis,
+  MAX_BYTES,
+  PATAS,
+  pesoManifiesto,
+  prepararManifiesto,
+} from "./triada.ts";
 
 test("spec0002_e15_vacio", () => {
   const resultado = prepararManifiesto("   ");
@@ -89,4 +97,14 @@ test("spec0002_e14_rutas", () => {
   assert.equal(paginaDe("/modulos/inyeccion"), "inyeccion");
   assert.equal(paginaDe("/modulos/aprobacion"), "aprobacion");
   assert.equal(paginaDe("/otra"), "no_encontrada");
+});
+
+test("diseno_peso_del_manifiesto", () => {
+  assert.equal(pesoManifiesto(""), "0 B de 1 MB");
+  assert.equal(pesoManifiesto("ñ"), "2 B de 1 MB");
+  assert.equal(pesoManifiesto("x".repeat(2458)), "2,4 KB de 1 MB");
+});
+
+test("diseno_cada_pata_tiene_descripcion", () => {
+  for (const pata of PATAS) assert.ok(DESCRIPCION_PATA[pata].length > 0);
 });

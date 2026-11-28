@@ -44,9 +44,6 @@ export function Egresos() {
 
   return (
     <>
-      <p>
-        <a href="/">← Estado del sistema</a>
-      </p>
       <section aria-labelledby="titulo-egresos" className="tarjeta">
         <h2 id="titulo-egresos">Sealed Tools y control de egresos</h2>
         <p className="ayuda">

@@ -3,9 +3,12 @@ import type { FormEvent } from "react";
 
 import { enviar, obtener } from "../api/cliente.ts";
 import {
+  cifras,
   cuerpoDecision,
   decididas,
   esRiesgosa,
+  estadoPuerta,
+  horaDe,
   interpretarDecision,
   interpretarEstado,
   interpretarSolicitudes,
@@ -16,6 +19,7 @@ import {
   pendientes,
   resumenBandeja,
   tiempoRestante,
+  tonoEstado,
 } from "../aprobacion.ts";
 import type { Decision, EstadoAprobacion, Solicitud } from "../aprobacion.ts";
 import { nombreRegla } from "../inyeccion.ts";
@@ -63,19 +67,21 @@ export function Aprobacion() {
     void cargar();
   }
 
+  const puerta = solicitudes ? estadoPuerta(estado) : null;
+
   return (
     <>
-      <p>
-        <a href="/">← Estado del sistema</a>
-      </p>
-      <section aria-labelledby="titulo-aprobacion" className="tarjeta">
-        <h2 id="titulo-aprobacion">Human-in-the-Loop</h2>
-        <p className="ayuda">
-          Las acciones irreversibles, las que tocan el plano de control y las de una sesión contaminada esperan aquí
-          una decisión. Una aprobación vale una sola vez y solo para esa acción exacta; si nadie decide, vence y se
-          niega.
-        </p>
-        <form onSubmit={consultar} className="acciones">
+      <header className="titulo-pagina">
+        <div>
+          <h1>Aprobación humana</h1>
+          {puerta && (
+            <p className={`linea-estado tono-${puerta.tono}`}>
+              <span className="punto" aria-hidden="true" />
+              {puerta.texto}
+            </p>
+          )}
+        </div>
+        <form onSubmit={consultar} className="acceso">
           <label htmlFor="token-admin-aprobacion" className="oculto">
             Token de administración
           </label>
@@ -92,12 +98,18 @@ export function Aprobacion() {
             {consultando ? "Consultando…" : solicitudes ? "Actualizar" : "Consultar"}
           </button>
         </form>
-        {error && (
-          <p className="error" role="alert">
-            {error}
-          </p>
-        )}
-      </section>
+      </header>
+
+      <p className="ayuda">
+        Las acciones irreversibles, las que tocan el plano de control y las de una sesión contaminada esperan aquí una
+        decisión. Una aprobación vale una sola vez y solo para esa acción exacta; si nadie decide, vence y se niega.
+      </p>
+
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
 
       {solicitudes && <Bandeja solicitudes={solicitudes} estado={estado} decidir={decidir} />}
     </>
@@ -115,27 +127,38 @@ function Bandeja({ solicitudes, estado, decidir }: PropsBandeja) {
   const cerradas = decididas(solicitudes);
   return (
     <>
-      <section className="tarjeta" role="status" aria-labelledby="titulo-bandeja">
-        <h2 id="titulo-bandeja">{resumenBandeja(solicitudes)}</h2>
-        {estado?.avisos.map((aviso) => (
-          <p key={aviso} className="aviso">
-            {aviso}
-          </p>
+      <ul className="cifras" aria-label="Resumen de solicitudes">
+        {cifras(estado, solicitudes).map((cifra) => (
+          <li key={cifra.id} className={`cifra tono-${cifra.tono}`}>
+            <span className="cifra-titulo">{cifra.titulo}</span>
+            <span className="cifra-valor">{cifra.valor}</span>
+            <span className="cifra-detalle">{cifra.detalle}</span>
+          </li>
         ))}
+      </ul>
+
+      {estado?.avisos.map((aviso) => (
+        <p key={aviso} className="aviso">
+          {aviso}
+        </p>
+      ))}
+
+      <div className="seccion-cabecera">
+        <h2 role="status">{resumenBandeja(solicitudes)}</h2>
         {estado && (
           <p className="ayuda">
-            Se decide en {estado.minutos_decision} min; aprobada, el agente tiene {estado.minutos_boleto} min para
-            reintentar.{" "}
+            Se decide en {estado.minutos_decision} min · aprobada, el agente tiene {estado.minutos_boleto} min para
+            reintentar ·{" "}
             {estado.notificar ? (
               <>
-                Avisos por <code>{estado.notificar}</code>.
+                avisos por <code>{estado.notificar}</code>
               </>
             ) : (
-              "Sin aviso por webhook."
+              "sin aviso por webhook"
             )}
           </p>
         )}
-      </section>
+      </div>
 
       {abiertas.map((solicitud) => (
         <TarjetaPendiente key={solicitud.id} solicitud={solicitud} decidir={decidir} />
@@ -144,30 +167,38 @@ function Bandeja({ solicitudes, estado, decidir }: PropsBandeja) {
       {cerradas.length > 0 && (
         <section className="tarjeta" aria-labelledby="titulo-decididas">
           <h2 id="titulo-decididas">Últimas decididas</h2>
-          <table className="tabla">
-            <thead>
-              <tr>
-                <th scope="col">Agente</th>
-                <th scope="col">Acción</th>
-                <th scope="col">Estado</th>
-                <th scope="col">Nota</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cerradas.map((solicitud) => (
-                <tr key={solicitud.id}>
-                  <td>
-                    <code>{solicitud.agente}</code>
-                  </td>
-                  <td>
-                    {solicitud.metodo} <code>{solicitud.destino}</code>
-                  </td>
-                  <td>{nombreEstado(solicitud.estado)}</td>
-                  <td>{solicitud.nota ?? "—"}</td>
+          <div className="tabla-contenedor">
+            <table className="tabla">
+              <thead>
+                <tr>
+                  <th scope="col">Hora</th>
+                  <th scope="col">Agente</th>
+                  <th scope="col">Acción</th>
+                  <th scope="col">Estado</th>
+                  <th scope="col">Nota</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {cerradas.map((solicitud) => (
+                  <tr key={solicitud.id}>
+                    <td className="mono suave">{horaDe(solicitud)}</td>
+                    <td>
+                      <span className="agente">{solicitud.agente}</span>
+                    </td>
+                    <td className="mono">
+                      <span className="metodo">{solicitud.metodo}</span> {solicitud.destino}
+                    </td>
+                    <td>
+                      <span className={`ficha tono-${tonoEstado(solicitud.estado)}`}>
+                        {nombreEstado(solicitud.estado)}
+                      </span>
+                    </td>
+                    <td className="suave">{solicitud.nota ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
     </>
@@ -179,6 +210,7 @@ function TarjetaPendiente({ solicitud, decidir }: { solicitud: Solicitud; decidi
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const senales = Object.entries(solicitud.senales);
+  const parametros = parametrosVisibles(solicitud.parametros);
   const idNota = `nota-${solicitud.id}`;
 
   async function responder(decision: Decision) {
@@ -188,14 +220,23 @@ function TarjetaPendiente({ solicitud, decidir }: { solicitud: Solicitud; decidi
   }
 
   return (
-    <section className="tarjeta" aria-label={`Solicitud de ${solicitud.agente}`}>
-      <h3>
-        <code>{solicitud.agente}</code> pide {solicitud.metodo} <code>{solicitud.destino}</code>
-      </h3>
-      <p>
-        {nombreMotivo(solicitud)} · sesión <code>{solicitud.sesion}</code> ·{" "}
-        {tiempoRestante(solicitud.vence, new Date())}
+    <section className="tarjeta pendiente" aria-label={`Solicitud de ${solicitud.agente}`}>
+      <div className="pendiente-cabecera">
+        <h3>
+          <span className="agente">{solicitud.agente}</span>
+          <span className="metodo">{solicitud.metodo}</span>
+          <span className="mono">{solicitud.destino}</span>
+        </h3>
+        <span className="mono suave">{tiempoRestante(solicitud.vence, new Date())}</span>
+      </div>
+
+      <p className="fichas">
+        <span className="ficha tono-alerta">{nombreMotivo(solicitud)}</span>
+        <span className="ficha tono-neutro">
+          sesión <span className="mono">{solicitud.sesion}</span>
+        </span>
       </p>
+
       {esRiesgosa(solicitud) && (
         <p className="aviso">
           Esta sesión leyó contenido no confiable. Los parámetros pueden venir de una inyección: revísalos como datos,
@@ -208,14 +249,13 @@ function TarjetaPendiente({ solicitud, decidir }: { solicitud: Solicitud; decidi
           {senales.map(([regla, conteo]) => `${nombreRegla(regla)} (${conteo})`).join(", ")}
         </p>
       )}
-      <h4>Parámetros</h4>
-      {parametrosVisibles(solicitud.parametros).length > 0 ? (
-        <dl>
-          {parametrosVisibles(solicitud.parametros).map(([clave, valor]) => (
+
+      <h4 className="rotulo">Parámetros</h4>
+      {parametros.length > 0 ? (
+        <dl className="parametros">
+          {parametros.map(([clave, valor]) => (
             <div key={clave}>
-              <dt>
-                <code>{clave}</code>
-              </dt>
+              <dt className="mono">{clave}</dt>
               <dd>
                 <pre className="manifiesto">{valor}</pre>
               </dd>
@@ -223,21 +263,25 @@ function TarjetaPendiente({ solicitud, decidir }: { solicitud: Solicitud; decidi
           ))}
         </dl>
       ) : (
-        <p>Sin parámetros.</p>
+        <p className="suave">Sin parámetros.</p>
       )}
-      <label htmlFor={idNota}>Nota (opcional)</label>
-      <input
-        id={idNota}
-        className="campo"
-        maxLength={MAX_NOTA}
-        value={nota}
-        onChange={(evento) => setNota(evento.target.value)}
-      />
-      <div className="acciones">
-        <button type="button" className="principal" disabled={enviando} onClick={() => void responder("aprobar")}>
+
+      <div className="decision">
+        <label htmlFor={idNota} className="oculto">
+          Nota (opcional)
+        </label>
+        <input
+          id={idNota}
+          className="campo"
+          maxLength={MAX_NOTA}
+          placeholder="Nota (opcional)"
+          value={nota}
+          onChange={(evento) => setNota(evento.target.value)}
+        />
+        <button type="button" className="aprobar" disabled={enviando} onClick={() => void responder("aprobar")}>
           Aprobar una vez
         </button>
-        <button type="button" className="boton" disabled={enviando} onClick={() => void responder("negar")}>
+        <button type="button" className="negar" disabled={enviando} onClick={() => void responder("negar")}>
           Negar
         </button>
       </div>

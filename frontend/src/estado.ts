@@ -46,3 +46,9 @@ export function interpretarVersion(respuesta: Respuesta): string | null {
   }
   return null;
 }
+
+/** El punto del pie del menú: `/health` no consulta la base, así que solo dice si la API responde. */
+export function semaforoApi(respuesta: Respuesta): Semaforo {
+  if (respuesta.tipo === "sin_respuesta") return "caida";
+  return respuesta.status === 200 ? "ok" : "desconocido";
+}
