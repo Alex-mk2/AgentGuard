@@ -291,12 +291,6 @@ a {
   color: var(--texto-suave);
 }
 
-.pie {
-  color: var(--texto-suave);
-  font-size: 0.85rem;
-  text-align: center;
-}
-
 .oculto {
   position: absolute;
   width: 1px;
@@ -401,75 +395,11 @@ button.principal:hover:not(:disabled) {
   box-shadow: 0 0 0 3px var(--marca-suave);
 }
 
-/* ---------- Estado del sistema ---------- */
-
-.indicadores,
-.modulos {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.indicador {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.4rem 0;
-}
-
-.indicador-nombre {
-  flex: 1;
-}
-
-.indicador-valor {
-  color: var(--texto-suave);
-  font-family: var(--mono);
-  font-size: 0.85rem;
-}
-
 .punto {
   width: 0.6rem;
   height: 0.6rem;
   border-radius: 50%;
   background: var(--neutro);
-}
-
-.punto-ok {
-  background: var(--permitir);
-  box-shadow: 0 0 0 3px var(--permitir-suave);
-}
-
-.punto-caida {
-  background: var(--bloquear);
-  box-shadow: 0 0 0 3px var(--bloquear-suave);
-}
-
-.modulo {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
-  padding: 0.75rem 0;
-  border-top: 1px solid var(--borde);
-}
-
-.modulo:first-child {
-  border-top: none;
-}
-
-.modulo p {
-  margin: 0.15rem 0 0;
-  color: var(--texto-suave);
-  font-size: 0.9rem;
-}
-
-.modulo a {
-  color: var(--texto);
-  text-decoration: none;
-}
-
-.modulo a:hover {
-  color: var(--marca);
 }
 
 /* ---------- Etiquetas y severidad ---------- */
@@ -482,12 +412,6 @@ button.principal:hover:not(:disabled) {
   border-radius: 999px;
   border: 1px solid var(--borde);
   color: var(--texto-suave);
-}
-
-.etiqueta-activo {
-  color: var(--permitir);
-  border-color: transparent;
-  background: var(--permitir-suave);
 }
 
 .severidad {
@@ -635,6 +559,7 @@ button.principal:hover:not(:disabled) {
 
 .linea-estado {
   display: flex;
+  width: fit-content;
   align-items: center;
   gap: 0.5rem;
   margin: 0.3rem 0 0;
@@ -674,6 +599,7 @@ button.principal:hover:not(:disabled) {
 .tono-permitir { --tono: var(--permitir); --tono-suave: var(--permitir-suave); }
 .tono-bloquear { --tono: var(--bloquear); --tono-suave: var(--bloquear-suave); }
 .tono-alerta { --tono: var(--alerta); --tono-suave: var(--alerta-suave); }
+.tono-marca { --tono: var(--marca); --tono-suave: var(--marca-suave); }
 .tono-neutro { --tono: var(--texto-suave); --tono-suave: rgba(148, 163, 184, 0.1); }
 
 .linea-estado .punto {
@@ -886,6 +812,10 @@ button.negar:hover:not(:disabled) {
   color: var(--texto-suave);
 }
 
+.bajada .linea-estado {
+  margin-top: 0.5rem;
+}
+
 .terminal {
   border: 1px solid var(--borde);
   border-radius: var(--radio);
@@ -913,13 +843,418 @@ button.negar:hover:not(:disabled) {
   color: var(--marca);
 }
 
-.terminal .manifiesto {
-  display: block;
-  border: none;
-  border-radius: 0;
-  background: transparent;
+
+/* ---------- Íconos, columnas y listas ---------- */
+
+.icono {
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-.terminal .manifiesto:focus {
-  box-shadow: none;
+.columnas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: 0 1rem;
+}
+
+.lista-filas {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.lista-filas > li {
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--borde);
+}
+
+.lista-filas > li:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.lista-fila-cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.lista-fila-cabecera > :first-child {
+  margin-right: auto;
+}
+
+.lista-filas .evidencia {
+  margin-top: 0.2rem;
+}
+
+.hosts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.hosts li {
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  background: var(--fondo);
+  color: var(--marca);
+}
+
+.nota-pie {
+  margin: 0.75rem 0 0;
+  font-size: 0.82rem;
+}
+
+/* ---------- Barras de conteo ---------- */
+
+.barras {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.barras li {
+  display: grid;
+  grid-template-columns: minmax(8rem, 14rem) minmax(0, 1fr) 2.5rem;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.88rem;
+}
+
+.barra-pista {
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--fondo);
+  overflow: hidden;
+}
+
+.barra-relleno {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--tono);
+  box-shadow: 0 0 10px -2px var(--tono);
+  transform-origin: left;
+  animation: crecer 0.6s ease-out both;
+}
+
+.barra-valor {
+  text-align: right;
+  color: var(--tono);
+}
+
+/* ---------- Estados vacíos y esqueleto de carga ---------- */
+
+.vacio-bloque {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 2rem 1rem;
+  border: 1px dashed var(--borde);
+  border-radius: var(--radio-grande);
+  color: var(--texto-suave);
+}
+
+.tarjeta .vacio-bloque {
+  border: none;
+  padding: 1.25rem 1rem;
+}
+
+.vacio-bloque .icono {
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0.6rem;
+  margin-bottom: 0.6rem;
+  border-radius: 50%;
+  color: var(--marca);
+  background: var(--marca-suave);
+  box-shadow: 0 0 24px -6px rgba(56, 189, 248, 0.5);
+}
+
+.vacio-titulo {
+  margin: 0;
+  font-weight: 600;
+  color: var(--texto);
+}
+
+.vacio-texto {
+  max-width: 28rem;
+  margin: 0.25rem 0 0;
+  font-size: 0.88rem;
+}
+
+.esqueleto-bloque {
+  height: 5.5rem;
+  border-top-color: var(--borde);
+}
+
+.esqueleto-bloque,
+.esqueleto-linea {
+  background: linear-gradient(90deg, var(--superficie) 0%, var(--superficie-alta) 40%, var(--superficie) 80%);
+  background-size: 200% 100%;
+  animation: brillo 1.4s linear infinite;
+}
+
+.esqueleto-linea {
+  height: 0.9rem;
+  margin: 0.7rem 0;
+  border-radius: 6px;
+}
+
+.esqueleto-linea:nth-child(2n) {
+  width: 70%;
+}
+
+/* ---------- Panel de inicio ---------- */
+
+.panel-modulos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: 0.75rem;
+}
+
+.panel-modulo {
+  position: relative;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--borde);
+  border-top-color: var(--borde-luz);
+  border-radius: var(--radio-grande);
+  background: var(--superficie);
+  box-shadow: var(--sombra);
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.panel-modulo:hover {
+  transform: translateY(-2px);
+  border-color: rgba(56, 189, 248, 0.45);
+}
+
+.panel-modulo-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.panel-modulo-cabecera .ficha {
+  margin-left: auto;
+}
+
+.panel-modulo-icono {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radio);
+  color: var(--marca);
+  background: var(--marca-suave);
+}
+
+.panel-modulo h3 {
+  margin: 0.8rem 0 0.25rem;
+  font-size: 1rem;
+}
+
+.panel-modulo h3 a {
+  color: var(--texto);
+  text-decoration: none;
+}
+
+/* Toda la tarjeta es clicable, pero sigue siendo un solo enlace para el lector de pantalla. */
+.panel-modulo h3 a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.panel-modulo p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--texto-suave);
+}
+
+/* ---------- Editor JSON ---------- */
+
+.editor {
+  --alto-linea: 1.5;
+  --tam: 0.82rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  height: calc(var(--filas) * var(--alto-linea) * var(--tam) + 1.3rem);
+  font: var(--tam) / var(--alto-linea) var(--mono);
+}
+
+.editor-margen {
+  overflow: hidden;
+  padding: 0.65rem 0.6rem 0.65rem 0.75rem;
+  border-right: 1px solid var(--borde);
+  text-align: right;
+  color: var(--neutro);
+  user-select: none;
+}
+
+.editor-margen span {
+  display: block;
+}
+
+.editor-margen .editor-margen-vacia {
+  opacity: 0.35;
+}
+
+.editor-cuerpo {
+  position: relative;
+}
+
+.editor-pintado,
+.editor-texto {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0.65rem;
+  border: none;
+  font: inherit;
+  white-space: pre;
+  tab-size: 2;
+  letter-spacing: 0;
+}
+
+.editor-pintado {
+  overflow: hidden;
+  pointer-events: none;
+  color: var(--texto);
+}
+
+.editor-texto {
+  overflow: auto;
+  resize: none;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--marca);
+  outline: none;
+}
+
+.editor-texto::placeholder {
+  color: var(--neutro);
+}
+
+.editor-texto::selection {
+  background: rgba(56, 189, 248, 0.25);
+}
+
+.json-clave { color: var(--marca); }
+.json-cadena { color: #a7f3d0; }
+.json-numero { color: #fbbf24; }
+.json-literal { color: #c4b5fd; }
+.json-puntuacion { color: var(--neutro); }
+
+.campo,
+.manifiesto {
+  caret-color: var(--marca);
+}
+
+/* ---------- Movimiento ---------- */
+
+@keyframes aparecer {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes encender {
+  0% {
+    border-color: var(--borde);
+    box-shadow: none;
+  }
+  60% {
+    box-shadow:
+      0 0 0 4px var(--bloquear-suave),
+      0 0 28px -4px rgba(244, 63, 94, 0.55);
+  }
+}
+
+@keyframes crecer {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes brillo {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.tarjeta,
+.cifra,
+.panel-modulo,
+.pata,
+.vacio-bloque,
+.aviso {
+  animation: aparecer 0.35s ease-out both;
+}
+
+.cifras > :nth-child(2),
+.patas > :nth-child(2),
+.panel-modulos > :nth-child(2) { animation-delay: 60ms; }
+.cifras > :nth-child(3),
+.patas > :nth-child(3),
+.panel-modulos > :nth-child(3) { animation-delay: 120ms; }
+.cifras > :nth-child(4),
+.panel-modulos > :nth-child(4) { animation-delay: 180ms; }
+.panel-modulos > :nth-child(5) { animation-delay: 240ms; }
+
+/* Las patas presentes se encienden una tras otra. */
+.pata-presente {
+  animation:
+    aparecer 0.35s ease-out both,
+    encender 0.9s ease-out both;
+}
+
+.patas > .pata-presente:nth-child(2) { animation-delay: 0.2s, 0.35s; }
+.patas > .pata-presente:nth-child(3) { animation-delay: 0.4s, 0.7s; }
+
+/* El esqueleto no aparece con fundido: ya se mueve con su brillo. */
+.esqueleto .cifra,
+.esqueleto .tarjeta {
+  animation: brillo 1.4s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@media (max-width: 36rem) {
+  .barras li {
+    grid-template-columns: minmax(0, 1fr) 2.5rem;
+  }
+
+  .barra-pista {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
 }

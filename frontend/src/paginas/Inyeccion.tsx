@@ -1,14 +1,16 @@
 import { useState } from "react";
-import type { FormEvent } from "react";
 
 import { obtener } from "../api/cliente.ts";
+import { AccesoAdmin, Cifras, Esqueleto, Ficha, TituloPagina, Vacio } from "../componentes.tsx";
 import {
+  cifrasInyeccion,
   interpretarInyeccion,
   nombreModo,
   nombreOrigen,
   nombreRegla,
   resumenInyeccion,
   sesionesOrdenadas,
+  tonoModo,
 } from "../inyeccion.ts";
 import type { EstadoInyeccion } from "../inyeccion.ts";
 import { cabeceraAdmin } from "../secretos.ts";
@@ -20,8 +22,7 @@ export function Inyeccion() {
   const [error, setError] = useState<string | null>(null);
   const [consultando, setConsultando] = useState(false);
 
-  async function consultar(evento: FormEvent) {
-    evento.preventDefault();
+  async function consultar() {
     const cabeceras = cabeceraAdmin(token);
     if (!cabeceras) {
       setError("Ingresa el token de administración.");
@@ -36,39 +37,37 @@ export function Inyeccion() {
 
   return (
     <>
-      <section aria-labelledby="titulo-inyeccion" className="tarjeta">
-        <h2 id="titulo-inyeccion">Contención de prompt injection</h2>
-        <p className="ayuda">
-          Todo contenido externo que entra al contexto de un agente contamina su sesión, y una sesión
-          contaminada pierde las acciones con efecto, se haya detectado la inyección o no. Las reglas
-          quitan lo invisible y marcan lo que parece una instrucción. Aquí se ve qué se contuvo, nunca el
-          contenido.
-        </p>
-        <form onSubmit={(evento) => void consultar(evento)} className="acciones">
-          <label htmlFor="token-admin-inyeccion" className="oculto">
-            Token de administración
-          </label>
-          <input
-            id="token-admin-inyeccion"
-            type="password"
-            className="campo"
-            autoComplete="off"
-            placeholder="Token de administración"
-            value={token}
-            onChange={(evento) => setToken(evento.target.value)}
-          />
-          <button type="submit" className="principal" disabled={consultando}>
-            {consultando ? "Consultando…" : "Consultar"}
-          </button>
-        </form>
-        {error && (
-          <p className="error" role="alert">
-            {error}
-          </p>
-        )}
-      </section>
+      <TituloPagina
+        titulo="Contención de prompt injection"
+        bajada="Todo contenido externo que entra al contexto de un agente contamina su sesión, y una sesión contaminada pierde las acciones con efecto, se haya detectado la inyección o no. Aquí se ve qué se contuvo, nunca el contenido."
+      >
+        <AccesoAdmin
+          id="token-admin-inyeccion"
+          token={token}
+          setToken={setToken}
+          consultando={consultando}
+          cargado={estado !== null}
+          alEnviar={() => void consultar()}
+        />
+      </TituloPagina>
 
-      {estado && <VistaInyeccion estado={estado} />}
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+
+      {estado ? (
+        <VistaInyeccion estado={estado} />
+      ) : consultando ? (
+        <Esqueleto />
+      ) : (
+        !error && (
+          <Vacio icono="inyeccion" titulo="Ingresa el token para ver la contención">
+            Sesiones activas, cuáles quedaron contaminadas y qué detectó cada regla.
+          </Vacio>
+        )
+      )}
     </>
   );
 }
@@ -77,12 +76,9 @@ function VistaInyeccion({ estado }: { estado: EstadoInyeccion }) {
   const sesiones = sesionesOrdenadas(estado.sesiones);
   const confiables = Object.entries(estado.origenes_confiables).filter(([, origenes]) => origenes.length > 0);
   return (
-    <section className="tarjeta" role="status" aria-labelledby="titulo-estado-inyeccion">
-      <h2 id="titulo-estado-inyeccion">{resumenInyeccion(estado)}</h2>
+    <div role="status" aria-label={resumenInyeccion(estado)}>
       {estado.error && (
-        <p className="error">
-          Configuración inválida, la contención sigue con los valores por defecto: {estado.error}
-        </p>
+        <p className="error">Configuración inválida, la contención sigue con los valores por defecto: {estado.error}</p>
       )}
       {estado.avisos.map((aviso) => (
         <p key={aviso} className="aviso">
@@ -90,76 +86,93 @@ function VistaInyeccion({ estado }: { estado: EstadoInyeccion }) {
         </p>
       ))}
 
-      <h3>Sesiones</h3>
-      {sesiones.length > 0 ? (
-        <table className="tabla">
-          <thead>
-            <tr>
-              <th scope="col">Sesión</th>
-              <th scope="col">Agente</th>
-              <th scope="col">Estado</th>
-              <th scope="col">Contaminada por</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sesiones.map((sesion) => (
-              <tr key={sesion.id}>
-                <td>
-                  <code>{sesion.id}</code>
-                  {sesion.acotada && " · acotada"}
-                </td>
-                <td>
-                  <code>{sesion.agente}</code>
-                </td>
-                <td>{sesion.contaminada ? "Contaminada: solo lectura" : "Limpia"}</td>
-                <td>{nombreOrigen(sesion.origen)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : (
-        <p>Ninguna activa.</p>
-      )}
-      <p className="ayuda">Una sesión se cierra por el runtime, por la administración o tras {estado.ttl_minutos} min sin uso.</p>
+      <Cifras cifras={cifrasInyeccion(estado)} etiqueta="Resumen de la contención" />
 
-      <h3>Reglas de inspección</h3>
-      <table className="tabla">
-        <thead>
-          <tr>
-            <th scope="col">Regla</th>
-            <th scope="col">Modo</th>
-            <th scope="col">Detecciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          {estado.reglas.map((regla) => (
-            <tr key={regla.id}>
-              <td>
-                {nombreRegla(regla.id)} <code>{regla.id}</code>
-              </td>
-              <td>{nombreModo(regla.modo)}</td>
-              <td>{regla.detecciones}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <p className="ayuda">
-        {estado.marcadores} {estado.marcadores === 1 ? "marcador configurado" : "marcadores configurados"}. Los
-        caracteres invisibles se eliminan siempre, sea cual sea el modo.
-      </p>
+      <section className="tarjeta" aria-labelledby="titulo-sesiones">
+        <h2 id="titulo-sesiones">Sesiones</h2>
+        {sesiones.length > 0 ? (
+          <div className="tabla-contenedor">
+            <table className="tabla">
+              <thead>
+                <tr>
+                  <th scope="col">Sesión</th>
+                  <th scope="col">Agente</th>
+                  <th scope="col">Estado</th>
+                  <th scope="col">Contaminada por</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sesiones.map((sesion) => (
+                  <tr key={sesion.id}>
+                    <td>
+                      <span className="mono">{sesion.id}</span>
+                      {sesion.acotada && <span className="suave"> · acotada</span>}
+                    </td>
+                    <td>
+                      <span className="agente">{sesion.agente}</span>
+                    </td>
+                    <td>
+                      <Ficha tono={sesion.contaminada ? "alerta" : "permitir"}>
+                        {sesion.contaminada ? "Contaminada: solo lectura" : "Limpia"}
+                      </Ficha>
+                    </td>
+                    <td className="suave">{sesion.contaminada ? nombreOrigen(sesion.origen) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <Vacio icono="escudo" titulo="Ninguna sesión activa">
+            El runtime abre una por conversación con <code>POST /api/v1/inyeccion/sesiones</code>.
+          </Vacio>
+        )}
+        <p className="ayuda nota-pie">
+          Una sesión se cierra por el runtime, por la administración o tras {estado.ttl_minutos} min sin uso.
+        </p>
+      </section>
 
-      {confiables.length > 0 && (
-        <>
-          <h3>Orígenes confiables</h3>
-          <ul>
-            {confiables.map(([agente, origenes]) => (
-              <li key={agente}>
-                <code>{agente}</code>: {origenes.map((origen) => nombreOrigen(origen)).join(", ")}
+      <div className="columnas">
+        <section className="tarjeta" aria-labelledby="titulo-reglas">
+          <h2 id="titulo-reglas">Reglas de inspección</h2>
+          <ul className="lista-filas">
+            {estado.reglas.map((regla) => (
+              <li key={regla.id}>
+                <div className="lista-fila-cabecera">
+                  <span>{nombreRegla(regla.id)}</span>
+                  <span className="mono suave">{regla.detecciones}</span>
+                  <Ficha tono={tonoModo(regla.modo)}>{nombreModo(regla.modo)}</Ficha>
+                </div>
+                <p className="evidencia mono">{regla.id}</p>
               </li>
             ))}
           </ul>
-        </>
-      )}
-    </section>
+          <p className="ayuda nota-pie">
+            {estado.marcadores} {estado.marcadores === 1 ? "marcador configurado" : "marcadores configurados"}. Los
+            caracteres invisibles se eliminan siempre, sea cual sea el modo.
+          </p>
+        </section>
+
+        <section className="tarjeta" aria-labelledby="titulo-confiables">
+          <h2 id="titulo-confiables">Orígenes confiables</h2>
+          {confiables.length > 0 ? (
+            <ul className="lista-filas">
+              {confiables.map(([agente, origenes]) => (
+                <li key={agente}>
+                  <div className="lista-fila-cabecera">
+                    <span className="agente">{agente}</span>
+                  </div>
+                  <p className="evidencia">{origenes.map((origen) => nombreOrigen(origen)).join(" · ")}</p>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <Vacio icono="inyeccion" titulo="Ninguno">
+              Todo lo que entra contamina la sesión: es lo más seguro.
+            </Vacio>
+          )}
+        </section>
+      </div>
+    </div>
   );
 }

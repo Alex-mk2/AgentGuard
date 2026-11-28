@@ -1,7 +1,7 @@
 import { useState } from "react";
-import type { FormEvent } from "react";
 
 import { enviar, obtener } from "../api/cliente.ts";
+import { AccesoAdmin, Cifras, Esqueleto, Ficha, TituloPagina, Vacio } from "../componentes.tsx";
 import {
   cifras,
   cuerpoDecision,
@@ -62,48 +62,35 @@ export function Aprobacion() {
     return resultado.ok ? null : resultado.error;
   }
 
-  function consultar(evento: FormEvent) {
-    evento.preventDefault();
-    void cargar();
-  }
-
   const puerta = solicitudes ? estadoPuerta(estado) : null;
 
   return (
     <>
-      <header className="titulo-pagina">
-        <div>
-          <h1>Aprobación humana</h1>
-          {puerta && (
-            <p className={`linea-estado tono-${puerta.tono}`}>
-              <span className="punto" aria-hidden="true" />
-              {puerta.texto}
-            </p>
-          )}
-        </div>
-        <form onSubmit={consultar} className="acceso">
-          <label htmlFor="token-admin-aprobacion" className="oculto">
-            Token de administración
-          </label>
-          <input
-            id="token-admin-aprobacion"
-            type="password"
-            className="campo"
-            autoComplete="off"
-            placeholder="Token de administración"
-            value={token}
-            onChange={(evento) => setToken(evento.target.value)}
-          />
-          <button type="submit" className="principal" disabled={consultando}>
-            {consultando ? "Consultando…" : solicitudes ? "Actualizar" : "Consultar"}
-          </button>
-        </form>
-      </header>
-
-      <p className="ayuda">
-        Las acciones irreversibles, las que tocan el plano de control y las de una sesión contaminada esperan aquí una
-        decisión. Una aprobación vale una sola vez y solo para esa acción exacta; si nadie decide, vence y se niega.
-      </p>
+      <TituloPagina
+        titulo="Aprobación humana"
+        bajada={
+          <>
+            Las acciones irreversibles, las que tocan el plano de control y las de una sesión contaminada esperan
+            aquí una decisión. Una aprobación vale una sola vez y solo para esa acción exacta; si nadie decide, vence
+            y se niega.
+            {puerta && (
+              <span className={`linea-estado tono-${puerta.tono}`}>
+                <span className="punto" aria-hidden="true" />
+                {puerta.texto}
+              </span>
+            )}
+          </>
+        }
+      >
+        <AccesoAdmin
+          id="token-admin-aprobacion"
+          token={token}
+          setToken={setToken}
+          consultando={consultando}
+          cargado={solicitudes !== null}
+          alEnviar={() => void cargar()}
+        />
+      </TituloPagina>
 
       {error && (
         <p className="error" role="alert">
@@ -111,7 +98,17 @@ export function Aprobacion() {
         </p>
       )}
 
-      {solicitudes && <Bandeja solicitudes={solicitudes} estado={estado} decidir={decidir} />}
+      {solicitudes ? (
+        <Bandeja solicitudes={solicitudes} estado={estado} decidir={decidir} />
+      ) : consultando ? (
+        <Esqueleto filas={4} />
+      ) : (
+        !error && (
+          <Vacio icono="aprobacion" titulo="Ingresa el token para ver la bandeja">
+            Aquí esperan las acciones que necesitan que una persona las apruebe o las niegue.
+          </Vacio>
+        )
+      )}
     </>
   );
 }
@@ -127,15 +124,7 @@ function Bandeja({ solicitudes, estado, decidir }: PropsBandeja) {
   const cerradas = decididas(solicitudes);
   return (
     <>
-      <ul className="cifras" aria-label="Resumen de solicitudes">
-        {cifras(estado, solicitudes).map((cifra) => (
-          <li key={cifra.id} className={`cifra tono-${cifra.tono}`}>
-            <span className="cifra-titulo">{cifra.titulo}</span>
-            <span className="cifra-valor">{cifra.valor}</span>
-            <span className="cifra-detalle">{cifra.detalle}</span>
-          </li>
-        ))}
-      </ul>
+      <Cifras cifras={cifras(estado, solicitudes)} etiqueta="Resumen de solicitudes" />
 
       {estado?.avisos.map((aviso) => (
         <p key={aviso} className="aviso">
@@ -160,9 +149,13 @@ function Bandeja({ solicitudes, estado, decidir }: PropsBandeja) {
         )}
       </div>
 
-      {abiertas.map((solicitud) => (
-        <TarjetaPendiente key={solicitud.id} solicitud={solicitud} decidir={decidir} />
-      ))}
+      {abiertas.length > 0 ? (
+        abiertas.map((solicitud) => <TarjetaPendiente key={solicitud.id} solicitud={solicitud} decidir={decidir} />)
+      ) : (
+        <Vacio icono="escudo" titulo="Nada espera tu decisión">
+          Cuando un agente intente una acción que necesita aprobación, aparecerá aquí.
+        </Vacio>
+      )}
 
       {cerradas.length > 0 && (
         <section className="tarjeta" aria-labelledby="titulo-decididas">
@@ -189,9 +182,7 @@ function Bandeja({ solicitudes, estado, decidir }: PropsBandeja) {
                       <span className="metodo">{solicitud.metodo}</span> {solicitud.destino}
                     </td>
                     <td>
-                      <span className={`ficha tono-${tonoEstado(solicitud.estado)}`}>
-                        {nombreEstado(solicitud.estado)}
-                      </span>
+                      <Ficha tono={tonoEstado(solicitud.estado)}>{nombreEstado(solicitud.estado)}</Ficha>
                     </td>
                     <td className="suave">{solicitud.nota ?? "—"}</td>
                   </tr>
@@ -231,10 +222,10 @@ function TarjetaPendiente({ solicitud, decidir }: { solicitud: Solicitud; decidi
       </div>
 
       <p className="fichas">
-        <span className="ficha tono-alerta">{nombreMotivo(solicitud)}</span>
-        <span className="ficha tono-neutro">
+        <Ficha tono="alerta">{nombreMotivo(solicitud)}</Ficha>
+        <Ficha tono="neutro">
           sesión <span className="mono">{solicitud.sesion}</span>
-        </span>
+        </Ficha>
       </p>
 
       {esRiesgosa(solicitud) && (

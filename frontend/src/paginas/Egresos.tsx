@@ -1,8 +1,8 @@
 import { useState } from "react";
-import type { FormEvent } from "react";
 
 import { obtener } from "../api/cliente.ts";
-import { filasConteo, interpretarEgresos, nombreCausa, resumenEgresos } from "../egresos.ts";
+import { AccesoAdmin, Cifras, Esqueleto, Ficha, TituloPagina, Vacio } from "../componentes.tsx";
+import { cifrasEgresos, filasConteo, interpretarEgresos, nombreCausa, resumenEgresos, tonoModoDlp } from "../egresos.ts";
 import type { EstadoEgresos } from "../egresos.ts";
 import { cabeceraAdmin, interpretarEstado } from "../secretos.ts";
 import type { AccionEstado } from "../secretos.ts";
@@ -16,8 +16,7 @@ export function Egresos() {
   const [error, setError] = useState<string | null>(null);
   const [consultando, setConsultando] = useState(false);
 
-  async function consultar(evento: FormEvent) {
-    evento.preventDefault();
+  async function consultar() {
     const cabeceras = cabeceraAdmin(token);
     if (!cabeceras) {
       setError("Ingresa el token de administración.");
@@ -44,38 +43,37 @@ export function Egresos() {
 
   return (
     <>
-      <section aria-labelledby="titulo-egresos" className="tarjeta">
-        <h2 id="titulo-egresos">Sealed Tools y control de egresos</h2>
-        <p className="ayuda">
-          Toda salida de red de AgentGuard pasa por una allowlist, un DLP sobre lo que escribe el agente y
-          una verificación de que el destino resuelve a IP públicas. Aquí se ve qué está permitido y qué
-          se bloqueó, nunca el contenido.
-        </p>
-        <form onSubmit={(evento) => void consultar(evento)} className="acciones">
-          <label htmlFor="token-admin-egresos" className="oculto">
-            Token de administración
-          </label>
-          <input
-            id="token-admin-egresos"
-            type="password"
-            className="campo"
-            autoComplete="off"
-            placeholder="Token de administración"
-            value={token}
-            onChange={(evento) => setToken(evento.target.value)}
-          />
-          <button type="submit" className="principal" disabled={consultando}>
-            {consultando ? "Consultando…" : "Consultar"}
-          </button>
-        </form>
-        {error && (
-          <p className="error" role="alert">
-            {error}
-          </p>
-        )}
-      </section>
+      <TituloPagina
+        titulo="Control de egresos"
+        bajada="Toda salida de red pasa por una allowlist, un DLP sobre lo que escribe el agente y una verificación de que el destino resuelve a IP públicas. Aquí se ve qué está permitido y qué se bloqueó, nunca el contenido."
+      >
+        <AccesoAdmin
+          id="token-admin-egresos"
+          token={token}
+          setToken={setToken}
+          consultando={consultando}
+          cargado={estado !== null}
+          alEnviar={() => void consultar()}
+        />
+      </TituloPagina>
 
-      {estado && <VistaEgresos estado={estado} bloqueadas={bloqueadas} />}
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+
+      {estado ? (
+        <VistaEgresos estado={estado} bloqueadas={bloqueadas} />
+      ) : consultando ? (
+        <Esqueleto />
+      ) : (
+        !error && (
+          <Vacio icono="egresos" titulo="Ingresa el token para ver las salidas">
+            Allowlist, reglas DLP y lo que se bloqueó desde el arranque.
+          </Vacio>
+        )
+      )}
     </>
   );
 }
@@ -85,9 +83,11 @@ function VistaEgresos({ estado, bloqueadas }: { estado: EstadoEgresos; bloqueada
   const observados = filasConteo(estado.observados);
   const web = Object.entries(estado.web);
   return (
-    <section className="tarjeta" role="status" aria-labelledby="titulo-estado-egresos">
-      <h2 id="titulo-estado-egresos">{resumenEgresos(estado)}</h2>
+    <div role="status" aria-label={resumenEgresos(estado)}>
       {estado.error && <p className="error">{estado.error}</p>}
+      {!estado.configurado && (
+        <p className="aviso">Sin allowlist configurada: toda salida de red está bloqueada.</p>
+      )}
       {bloqueadas.length > 0 && (
         <p className="aviso">
           Acciones del broker con un host fuera de la allowlist:{" "}
@@ -95,95 +95,90 @@ function VistaEgresos({ estado, bloqueadas }: { estado: EstadoEgresos; bloqueada
         </p>
       )}
 
-      <h3>Allowlist global</h3>
-      {estado.allowlist.length > 0 ? (
-        <ul>
-          {estado.allowlist.map((entrada) => (
-            <li key={entrada}>
-              <code>{entrada}</code>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p>Vacía: no sale nada.</p>
-      )}
+      <Cifras cifras={cifrasEgresos(estado)} etiqueta="Resumen de egresos" />
 
-      {web.length > 0 && (
-        <>
-          <h3>Egreso web por agente</h3>
-          <table className="tabla">
-            <thead>
-              <tr>
-                <th scope="col">Agente</th>
-                <th scope="col">Hosts permitidos</th>
-              </tr>
-            </thead>
-            <tbody>
-              {web.map(([agente, hosts]) => (
-                <tr key={agente}>
-                  <td>
-                    <code>{agente}</code>
-                  </td>
-                  <td>{hosts.join(", ")}</td>
-                </tr>
+      <div className="columnas">
+        <section className="tarjeta" aria-labelledby="titulo-allowlist">
+          <h2 id="titulo-allowlist">Allowlist global</h2>
+          {estado.allowlist.length > 0 ? (
+            <ul className="hosts">
+              {estado.allowlist.map((entrada) => (
+                <li key={entrada} className="mono">
+                  {entrada}
+                </li>
               ))}
-            </tbody>
-          </table>
-        </>
-      )}
+            </ul>
+          ) : (
+            <Vacio icono="egresos" titulo="Vacía: no sale nada" />
+          )}
 
-      <h3>Reglas DLP</h3>
-      <table className="tabla">
-        <thead>
-          <tr>
-            <th scope="col">Regla</th>
-            <th scope="col">Modo</th>
-          </tr>
-        </thead>
-        <tbody>
-          {estado.reglas.map((regla) => (
-            <tr key={regla.id}>
-              <td>
-                {nombreCausa(regla.id)} <code>{regla.id}</code>
-              </td>
-              <td>{regla.modo === "bloquear" ? "Bloquea" : "Solo observa"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <p className="ayuda">
-        {estado.marcadores} {estado.marcadores === 1 ? "marcador configurado" : "marcadores configurados"}.
-      </p>
+          {web.length > 0 && (
+            <>
+              <h3 className="rotulo">Egreso web por agente</h3>
+              <ul className="lista-filas">
+                {web.map(([agente, hosts]) => (
+                  <li key={agente}>
+                    <div className="lista-fila-cabecera">
+                      <span className="agente">{agente}</span>
+                    </div>
+                    <p className="evidencia mono">{hosts.join(" · ")}</p>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </section>
 
-      <h3>Bloqueos desde el arranque</h3>
-      {bloqueos.length > 0 ? <Conteo filas={bloqueos} /> : <p>Ninguno.</p>}
-      {observados.length > 0 && (
-        <>
-          <h3>Observados (no bloqueados)</h3>
-          <Conteo filas={observados} />
-        </>
-      )}
-    </section>
+        <section className="tarjeta" aria-labelledby="titulo-dlp">
+          <h2 id="titulo-dlp">Reglas DLP</h2>
+          <ul className="lista-filas">
+            {estado.reglas.map((regla) => (
+              <li key={regla.id}>
+                <div className="lista-fila-cabecera">
+                  <span>{nombreCausa(regla.id)}</span>
+                  <Ficha tono={tonoModoDlp(regla.modo)}>{regla.modo === "bloquear" ? "Bloquea" : "Solo observa"}</Ficha>
+                </div>
+                <p className="evidencia mono">{regla.id}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </div>
+
+      <section className="tarjeta" aria-labelledby="titulo-bloqueos">
+        <h2 id="titulo-bloqueos">Bloqueos desde el arranque</h2>
+        {bloqueos.length > 0 ? (
+          <Barras filas={bloqueos} tono="bloquear" />
+        ) : (
+          <Vacio icono="escudo" titulo="Nada bloqueado todavía">
+            Cuando una salida choque con la allowlist o el DLP, aparecerá aquí con su causa.
+          </Vacio>
+        )}
+        {observados.length > 0 && (
+          <>
+            <h3 className="rotulo">Observadas (salieron, quedaron marcadas)</h3>
+            <Barras filas={observados} tono="alerta" />
+          </>
+        )}
+      </section>
+    </div>
   );
 }
 
-function Conteo({ filas }: { filas: { causa: string; veces: number }[] }) {
+/** Conteo por causa como barras horizontales: la más frecuente ocupa todo el ancho. */
+function Barras({ filas, tono }: { filas: { causa: string; veces: number }[]; tono: "bloquear" | "alerta" }) {
+  const maximo = Math.max(...filas.map((fila) => fila.veces), 1);
   return (
-    <table className="tabla">
-      <thead>
-        <tr>
-          <th scope="col">Causa</th>
-          <th scope="col">Veces</th>
-        </tr>
-      </thead>
-      <tbody>
-        {filas.map((fila) => (
-          <tr key={fila.causa}>
-            <td>{fila.causa}</td>
-            <td>{fila.veces}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <ul className={`barras tono-${tono}`}>
+      {filas.map((fila) => (
+        <li key={fila.causa}>
+          <span className="barra-causa">{fila.causa}</span>
+          <span className="barra-pista" aria-hidden="true">
+            <span className="barra-relleno" style={{ width: `${(fila.veces / maximo) * 100}%` }} />
+          </span>
+          <span className="barra-valor mono">{fila.veces}</span>
+        </li>
+      ))}
+    </ul>
   );
 }

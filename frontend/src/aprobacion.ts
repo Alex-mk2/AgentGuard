@@ -1,7 +1,10 @@
 // Lógica pura de la bandeja de aprobación humana (SPEC-0006 E5–E7, E15), sin JSX ni DOM.
 
 import type { Respuesta } from "./api/cliente.ts";
+import type { Cifra, Tono } from "./diseno.ts";
 import { nombreOrigen } from "./inyeccion.ts";
+
+export type { Cifra, Tono };
 
 export type EstadoSolicitud = "pendiente" | "aprobada" | "negada" | "vencida" | "usada" | "cancelada";
 
@@ -184,9 +187,6 @@ function esEstado(cuerpo: unknown): cuerpo is EstadoAprobacion {
 
 // ---------- Presentación (sistema de diseño Tactical Terminal) ----------
 
-/** Verde solo para lo permitido, rojo solo para lo negado, ámbar para lo que espera. */
-export type Tono = "permitir" | "bloquear" | "alerta" | "neutro";
-
 const TONOS: Readonly<Record<EstadoSolicitud, Tono>> = {
   pendiente: "alerta",
   aprobada: "permitir",
@@ -198,14 +198,6 @@ const TONOS: Readonly<Record<EstadoSolicitud, Tono>> = {
 
 export function tonoEstado(estado: EstadoSolicitud): Tono {
   return TONOS[estado];
-}
-
-export interface Cifra {
-  id: "pendientes" | "aprobadas" | "negadas" | "cerradas";
-  titulo: string;
-  valor: number;
-  detalle: string;
-  tono: Tono;
 }
 
 /** Las cuatro cifras de la bandeja. Salen de los contadores de la base (todo el historial); si la base no

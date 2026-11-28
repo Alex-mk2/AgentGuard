@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { obtener } from "./api/cliente.ts";
+import { Escudo, Icono } from "./componentes.tsx";
 import { interpretarVersion, semaforoApi } from "./estado.ts";
 import type { Semaforo } from "./estado.ts";
 import { MODULOS } from "./modulos.ts";
@@ -59,7 +60,7 @@ function Menu({ actual }: { actual: Pagina }) {
   return (
     <aside className="menu">
       <a className="marca" href="/">
-        <Escudo />
+        <Escudo clase="marca-icono" />
         <span>
           <span className="marca-nombre">AgentGuard</span>
           <span className="marca-lema">Seguridad para agentes de IA</span>
@@ -94,39 +95,10 @@ function Entrada({ id, ruta, texto, actual }: { id: Pagina; ruta: string; texto:
   return (
     <li>
       <a className="menu-entrada" href={ruta} aria-current={id === actual ? "page" : undefined}>
-        <Icono id={id} />
+        <Icono id={id} clase="menu-icono" />
         {texto}
       </a>
     </li>
-  );
-}
-
-/** Íconos de línea (24×24, trazo), dibujados a mano: sin librería de íconos. */
-const TRAZOS: Partial<Record<Pagina, readonly string[]>> = {
-  estado: ["M3 12h4l3-8 4 16 3-8h4"],
-  triada: ["M12 3.5 2.8 19.5h18.4Z", "M12 10v4", "M12 16.8v.2"],
-  secretos: ["M7.5 19a4.5 4.5 0 1 1 3.6-7.2", "M11.1 11.8 20 3", "M16.5 6.5l2.5 2.5", "M14 9l2 2"],
-  egresos: ["M14 4h6v6", "M20 4l-9 9", "M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"],
-  inyeccion: ["M3.5 4.5h17l-6.5 7.5v6l-4 2v-8Z"],
-  aprobacion: ["M9 11.5a3.75 3.75 0 1 0 0-7.5 3.75 3.75 0 0 0 0 7.5Z", "M2.5 20.5c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6", "m16 11 2 2 4-4"],
-};
-
-function Icono({ id }: { id: Pagina }) {
-  return (
-    <svg className="menu-icono" viewBox="0 0 24 24" aria-hidden="true">
-      {(TRAZOS[id] ?? []).map((d) => (
-        <path key={d} d={d} />
-      ))}
-    </svg>
-  );
-}
-
-function Escudo() {
-  return (
-    <svg className="marca-icono" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 2.5 4 5.5v6c0 4.9 3.4 8.6 8 10 4.6-1.4 8-5.1 8-10v-6l-8-3Z" />
-      <path d="m8.5 12 2.5 2.5 4.5-5" />
-    </svg>
   );
 }
 

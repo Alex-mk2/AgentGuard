@@ -1,6 +1,8 @@
 // Lógica pura de la pantalla del Secret Broker (SPEC-0003 E11, E13, E15; SPEC-0004 E3), sin JSX ni DOM.
 
 import type { Respuesta } from "./api/cliente.ts";
+import type { Cifra, Tono } from "./diseno.ts";
+import { plural } from "./diseno.ts";
 
 export interface AccionEstado {
   id: string;
@@ -80,4 +82,50 @@ export function resumen(estado: EstadoBroker): string {
 export function estadoAccion(accion: AccionEstado): string {
   if (accion.bloqueada_por_egresos) return "Bloqueada por egresos";
   return accion.disponible ? "Disponible" : "Sin secreto cargado";
+}
+
+// ---------- Presentación ----------
+
+export function tonoAccion(accion: AccionEstado): Tono {
+  if (accion.bloqueada_por_egresos) return "bloquear";
+  return accion.disponible ? "permitir" : "alerta";
+}
+
+/** Las cuatro cifras del broker. Nunca valores de secretos: solo cuántos están cargados. */
+export function cifrasBroker(estado: EstadoBroker): Cifra[] {
+  const disponibles = estado.acciones.filter((a) => a.disponible).length;
+  const bloqueadas = estado.acciones.filter((a) => a.bloqueada_por_egresos).length;
+  const cargados = estado.secretos.filter((s) => s.cargado).length;
+  const faltan = estado.secretos.length - cargados;
+  const sinToken = estado.agentes.filter((a) => !a.token_cargado).length;
+  return [
+    {
+      id: "acciones",
+      titulo: "Acciones disponibles",
+      valor: disponibles,
+      detalle: `de ${estado.acciones.length} configuradas`,
+      tono: disponibles === estado.acciones.length ? "permitir" : "alerta",
+    },
+    {
+      id: "secretos",
+      titulo: "Secretos cargados",
+      valor: cargados,
+      detalle: faltan ? `faltan ${faltan}` : "todos presentes",
+      tono: faltan ? "alerta" : "permitir",
+    },
+    {
+      id: "agentes",
+      titulo: "Agentes",
+      valor: estado.agentes.length,
+      detalle: sinToken ? `${plural(sinToken, "sin token", "sin token")}` : "todos con token",
+      tono: sinToken ? "alerta" : "marca",
+    },
+    {
+      id: "bloqueadas",
+      titulo: "Bloqueadas por egresos",
+      valor: bloqueadas,
+      detalle: bloqueadas ? "host fuera de la allowlist" : "ninguna",
+      tono: bloqueadas ? "bloquear" : "neutro",
+    },
+  ];
 }

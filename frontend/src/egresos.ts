@@ -1,6 +1,8 @@
 // Lógica pura de la pantalla de control de egresos (SPEC-0004 E15, E16), sin JSX ni DOM.
 
 import type { Respuesta } from "./api/cliente.ts";
+import type { Cifra, Tono } from "./diseno.ts";
+import { plural, suma } from "./diseno.ts";
 
 export interface ReglaDlp {
   id: string;
@@ -78,4 +80,46 @@ export function filasConteo(conteo: Record<string, number>): { causa: string; ve
   return Object.entries(conteo)
     .map(([id, veces]) => ({ causa: nombreCausa(id), veces }))
     .sort((a, b) => b.veces - a.veces || a.causa.localeCompare(b.causa));
+}
+
+// ---------- Presentación ----------
+
+export function tonoModoDlp(modo: ReglaDlp["modo"]): Tono {
+  return modo === "bloquear" ? "bloquear" : "neutro";
+}
+
+export function cifrasEgresos(estado: EstadoEgresos): Cifra[] {
+  const bloquean = estado.reglas.filter((r) => r.modo === "bloquear").length;
+  const bloqueos = suma(estado.bloqueos);
+  const observados = suma(estado.observados);
+  return [
+    {
+      id: "allowlist",
+      titulo: "Destinos permitidos",
+      valor: estado.allowlist.length,
+      detalle: estado.configurado ? "en la allowlist global" : "sin allowlist: no sale nada",
+      tono: estado.configurado ? "marca" : "bloquear",
+    },
+    {
+      id: "dlp",
+      titulo: "Reglas DLP",
+      valor: estado.reglas.length,
+      detalle: `${bloquean} bloquean · ${plural(estado.marcadores, "marcador", "marcadores")}`,
+      tono: "marca",
+    },
+    {
+      id: "bloqueos",
+      titulo: "Salidas bloqueadas",
+      valor: bloqueos,
+      detalle: "desde el arranque",
+      tono: bloqueos ? "bloquear" : "neutro",
+    },
+    {
+      id: "observados",
+      titulo: "Observadas",
+      valor: observados,
+      detalle: "salieron, pero quedaron marcadas",
+      tono: observados ? "alerta" : "neutro",
+    },
+  ];
 }

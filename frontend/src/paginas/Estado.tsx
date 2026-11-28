@@ -1,24 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { obtener } from "../api/cliente.ts";
-import { interpretarDependencias, interpretarVersion } from "../estado.ts";
-import type { EstadoSistema, Semaforo } from "../estado.ts";
+import { Cifras, Ficha, Icono, TituloPagina } from "../componentes.tsx";
+import { cifrasSistema, interpretarDependencias, interpretarVersion } from "../estado.ts";
+import type { EstadoSistema } from "../estado.ts";
 import { MODULOS } from "../modulos.ts";
+import { paginaDe } from "../rutas.ts";
 
-const ETIQUETA: Record<Semaforo, string> = { ok: "En línea", caida: "Caído", desconocido: "Sin datos" };
-
-function Indicador({ nombre, valor }: { nombre: string; valor: Semaforo | "cargando" }) {
-  const texto = valor === "cargando" ? "Comprobando…" : ETIQUETA[valor];
-  return (
-    <li className="indicador">
-      <span className={`punto punto-${valor}`} aria-hidden="true" />
-      <span className="indicador-nombre">{nombre}</span>
-      <span className="indicador-valor">{texto}</span>
-    </li>
-  );
-}
-
-/** Página de estado (SPEC-0001 H4). */
+/** Página de estado (SPEC-0001 H4): el panel de inicio. */
 export function Estado() {
   const [estado, setEstado] = useState<EstadoSistema | null>(null);
   const [version, setVersion] = useState<string | null>(null);
@@ -39,40 +28,38 @@ export function Estado() {
 
   return (
     <>
-      <section aria-labelledby="titulo-estado" className="tarjeta">
-        <div className="tarjeta-cabecera">
-          <h2 id="titulo-estado">Estado del sistema</h2>
-          <button type="button" onClick={() => void comprobar()} disabled={estado === null}>
-            Comprobar de nuevo
-          </button>
-        </div>
-        <ul className="indicadores">
-          <Indicador nombre="API" valor={estado?.api ?? "cargando"} />
-          <Indicador nombre="PostgreSQL" valor={estado?.postgres ?? "cargando"} />
-        </ul>
-        <p className="mensaje" role="status">
-          {estado?.mensaje ?? "Consultando la API…"}
-        </p>
-      </section>
+      <TituloPagina
+        titulo="Estado del sistema"
+        bajada="AgentGuard se interpone entre el agente y el mundo: rompe la Tríada Letal en cada punto en vez de confiar en que el modelo se porte bien."
+      >
+        <button type="button" onClick={() => void comprobar()} disabled={estado === null}>
+          {estado === null ? "Comprobando…" : "Comprobar de nuevo"}
+        </button>
+      </TituloPagina>
 
-      <section aria-labelledby="titulo-modulos" className="tarjeta">
-        <h2 id="titulo-modulos">Módulos</h2>
-        <ol className="modulos">
-          {MODULOS.map((modulo) => (
-            <li key={modulo.id} className="modulo">
-              <div>
-                <strong>{modulo.ruta ? <a href={modulo.ruta}>{modulo.nombre}</a> : modulo.nombre}</strong>
-                <p>{modulo.descripcion}</p>
-              </div>
-              <span className={`etiqueta etiqueta-${modulo.estado}`}>
-                {modulo.estado === "pendiente" ? "Pendiente" : "Activo"}
+      <Cifras cifras={cifrasSistema(estado, version)} etiqueta="Estado del sistema" />
+      <p className="mensaje" role="status">
+        {estado?.mensaje ?? "Consultando la API…"}
+      </p>
+
+      <h2 className="rotulo">Módulos</h2>
+      <ol className="panel-modulos">
+        {MODULOS.map((modulo, i) => (
+          <li key={modulo.id} className="panel-modulo">
+            <div className="panel-modulo-cabecera">
+              <span className="panel-modulo-icono">
+                <Icono id={modulo.ruta ? paginaDe(modulo.ruta) : "estado"} />
               </span>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      <footer className="pie">{version ? `Versión ${version}` : ""}</footer>
+              <span className="mono suave">0{i + 1}</span>
+              <Ficha tono={modulo.estado === "activo" ? "permitir" : "neutro"}>
+                {modulo.estado === "activo" ? "Activo" : "Pendiente"}
+              </Ficha>
+            </div>
+            <h3>{modulo.ruta ? <a href={modulo.ruta}>{modulo.nombre}</a> : modulo.nombre}</h3>
+            <p>{modulo.descripcion}</p>
+          </li>
+        ))}
+      </ol>
     </>
   );
 }

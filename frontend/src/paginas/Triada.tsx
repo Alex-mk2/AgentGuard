@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 
 import { enviar } from "../api/cliente.ts";
+import { EditorJson, TituloPagina } from "../componentes.tsx";
 import { EJEMPLO_TRIADA } from "../ejemplos/triada.ts";
 import {
   DESCRIPCION_PATA,
@@ -54,17 +55,12 @@ export function Triada() {
 
   return (
     <>
-      <header className="titulo-pagina">
-        <div>
-          <h1 id="titulo-triada">Detector de la Tríada Letal</h1>
-          <p className="bajada">
-            Un agente que lee datos privados, ingiere contenido no confiable y puede enviar datos afuera puede ser
-            llevado a exfiltrarlos con una inyección de prompt.
-          </p>
-        </div>
-      </header>
+      <TituloPagina
+        titulo="Detector de la Tríada Letal"
+        bajada="Un agente que lee datos privados, ingiere contenido no confiable y puede enviar datos afuera puede ser llevado a exfiltrarlos con una inyección de prompt."
+      />
 
-      <section aria-labelledby="titulo-triada" className="tarjeta">
+      <section aria-label="Manifiesto a analizar" className="tarjeta">
         <p className="ayuda">
           Pega el resultado de <code>tools/list</code> de un servidor MCP o un manifiesto de AgentGuard
           (con <code>herramientas</code>). El análisis no guarda nada.
@@ -77,13 +73,11 @@ export function Triada() {
               </label>
               <span className="mono">{pesoManifiesto(texto)}</span>
             </div>
-            <textarea
+            <EditorJson
               id="manifiesto"
-              className="manifiesto"
-              value={texto}
-              onChange={(evento) => setTexto(evento.target.value)}
-              spellCheck={false}
-              rows={14}
+              valor={texto}
+              alCambiar={setTexto}
+              filas={14}
               placeholder='{"tools": [ ... ]}'
             />
           </div>
