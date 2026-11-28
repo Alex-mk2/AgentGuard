@@ -4,7 +4,7 @@
 > código → `graphify query`. Esta bitácora → en qué vamos y por qué.
 
 ## Estado actual
-- `feat/diseno-tactical` (Alex) — rediseño del frontend con el sistema «Tactical Terminal» (elegido entre 3 bocetos): menú lateral con íconos y estado de la API, panel de inicio, las 6 pantallas con encabezado, cifras, fichas por tono, estados vacíos y esqueleto de carga; editor JSON de Tríada con números de línea y resaltado. Piezas en `src/componentes.tsx`, lógica con pruebas en `src/diseno.ts`. 57 pruebas y build en verde; revisado por Alex en el navegador. Falta el PR. — Alex, 2026-11-28
+- `feat/diseno-tactical` mergeada (#15, integrada por Alex) — rediseño del frontend con el sistema «Tactical Terminal» (elegido entre 3 bocetos): menú lateral con íconos y estado de la API, panel de inicio, las 6 pantallas con encabezado, cifras, fichas por tono, estados vacíos y esqueleto de carga; editor JSON de Tríada con números de línea y resaltado. Piezas en `src/componentes.tsx`, lógica con pruebas en `src/diseno.ts`. 57 pruebas y build en verde; revisado por Alex en el navegador. — Alex, 2026-11-28
 - `chore/imagen-distroless` (Alex) — imagen final sobre `gcr.io/distroless/python3-debian13` (fijada por digest): sin shell, apt, dpkg, Node ni pip; usuario 65532. El venv se arma en `debian:13.7-slim` con el mismo paquete de Python. El backend pasa a **Python 3.13** (pyproject, mypy, ruff, CI, Dependabot). La capa `imagen` lee el contenido con `docker export` y el proceso con `python`; de paso se corrigen los `! cmd` que con `set -e` nunca fallaban. En local: ruff, mypy, pip-audit, bandit, 584 unitarias y 8 de integración en 3.13; Trivy sin HIGH/CRITICAL con arreglo; el paso nuevo pasa con la imagen nueva y falla con la anterior; compose con base real `healthy`. Integrado en `main` (#10). — Alex, 2026-11-26
 - `chore/fundacion` mergeada (#1, integrada por Alex) — base del repo tomada de CondorForge: skills, hooks, gitleaks, CI con las 5 capas, Dependabot y protección de `main`. — Alex, 2026-11-24
 - `docs/que-es-agentguard` mergeada (#2, integrada por Alex) — qué es AgentGuard y sus 5 módulos en `context.md` §1 y el README. — Alex, 2026-11-25
@@ -17,6 +17,7 @@
 - `feat/detector-triada` mergeada (#4, integrada por Alex) — [SPEC-0002](../docs/specs/0002-detector-triada/spec.md), módulo 1: `POST /api/v1/triada/analisis` (MCP `tools/list` y formato propio), 23 reglas por palabras con evidencia, peor caso para lo sin clasificar, tope global de 1 MB y pantalla `/modulos/triada`. Probado con la imagen: los 6 manifiestos de referencia, 422/413, y servidores MCP reales (filesystem → baja, fetch → media, juntos → crítica). — Alex, 2026-11-25
 
 ## Decisiones
+- 2026-11-28 — Hoja de ruta tras los 5 módulos: primero proteger agentes reales (MCP, red aislada), después cerrar huecos (identidad, broker aparte, gestor externo) y luego integrar LLM, solo para sumar señales. Por qué: la SPEC-0007 es la base del agente de referencia con LLM, y la identidad desbloquea tres pendientes a la vez. — Alex
 - 2026-11-28 — Frontend **solo oscuro**, con fuentes empaquetadas (`@fontsource`, Inter y JetBrains Mono) y una regla de color: verde solo para permitir, rojo solo para negar o bloquear, ámbar para lo pendiente, cian para la marca y el agente. Por qué: la paleta elegida no trae variante clara, y una herramienta de seguridad no debe pedir recursos a terceros (Google Fonts). — Alex
 - 2026-11-28 — El menú no muestra cuántas aprobaciones esperan. Por qué: exigiría compartir el token de administración fuera de la página que lo pide; hoy vive solo en el estado de cada componente. — Alex
 - 2026-11-26 — Imagen **distroless con el Python de Debian (3.13)** en vez de trasplantar el 3.12 oficial sobre `cc-debian13`. Por qué: los paquetes de Debian están registrados y Trivy los ve; un Python copiado a mano queda fuera del escaneo. Costo: Debian no publica DSA para CVE «minor issue» de Python (hoy 19553, 15308 y 19445 sin arreglo en trixie). Revisados: AgentGuard no cae en ninguno (`sni_hostname` nunca va vacío porque `destino()` exige host, no usa `html.parser`, no termina TLS como servidor). — Alex
@@ -30,20 +31,8 @@
 - 2026-11-25 — La prueba de rendimiento de SPEC-0002 (500 herramientas < 200 ms) solo exige el tiempo en el CI. Por qué: en local con Docker y CondorForge corriendo varió entre 190 y 380 ms en corridas seguidas; una prueba que falla al azar es peor que no tenerla. — Alex
 
 ## Pendientes
-- [ ] Abrir el PR de `feat/diseno-tactical` (3 commits locales).
+- [ ] Siguiente: SPEC-0007, servidor MCP (JSON-RPC). Lo primero es decidir cómo se ve la aprobación humana en MCP. Orden completo y resto de specs candidatas → [hoja de ruta](../docs/specs/hoja-de-ruta.md).
 - [ ] Prueba manual que faltó de SPEC-0006: reintentar con un boleto vencido (esperado `403`). Las demás pruebas HITL pasaron el 2026-11-27.
-- [ ] Spec futura: historial de análisis de la Tríada (exige autenticación y retención; SPEC-0002 D-03).
-- [ ] Idea futura: modelo local como segunda opinión del Detector, que solo pueda sumar patas (SPEC-0002 D-02).
-- [ ] Spec futura: separar el Secret Broker en un proceso propio, sin la superficie del resto (opción 6 de la revisión de riesgos del 2026-11-25; la que resuelve la concentración de credenciales).
-- [ ] Spec futura: gestor de secretos externo (Vault / Secret Manager) y credenciales de vida corta como nuevas `FuenteSecretos` (opciones 5 y 4).
-- [x] Chore: imagen sin shell (base distroless) y verificaciones de la capa `imagen` sin `docker exec … test` → `chore/imagen-distroless`.
-- [ ] CD (despliegue automático desde `main`) cuando el flujo de CI esté internalizado.
-- [ ] SPEC-0007: servidor MCP completo (JSON-RPC, Streamable HTTP) delante de las herramientas selladas; hoy hay catálogo MCP y ejecución por REST (SPEC-0004). Decisión clave: cómo se ve la aprobación humana en MCP (esperar, devolver «pendiente» o tareas asíncronas).
-- [ ] Ejemplo de despliegue donde el runtime del agente solo alcanza a AgentGuard por la red (supuesto de SPEC-0004).
-- [ ] Spec futura: sandbox de ejecución de código como servicio aparte, sin el socket de Docker en AgentGuard (SPEC-0005 D-03).
-- [x] Módulo 5 (Human-in-the-Loop): convertir el `403` de sesión contaminada en una solicitud de aprobación (SPEC-0005 E8) → SPEC-0006.
-- [ ] Spec futura: aprobar desde el canal de notificación con un clic (callback firmado) y aprobadores con identidad propia o de a dos (SPEC-0006, fuera de alcance).
-- [ ] Idea futura: persistir sesiones en Postgres; hoy viven en memoria y lo desconocido falla cerrado (SPEC-0005 RF-04).
 
 ## Trampas conocidas
 - El editor de Tríada pinta los colores en un `<pre>` bajo un `textarea` transparente: ambos deben tener la misma fuente, padding y `white-space: pre` (sin envolver), o el resaltado se desalinea del texto. — Alex, 2026-11-28
