@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { cifrasSistema, interpretarDependencias, interpretarVersion, semaforoApi } from "./estado.ts";
+import { cifrasSistema, interpretarDependencias, interpretarVersion, semaforoApi, tonoSistema } from "./estado.ts";
 import { MODULOS } from "./modulos.ts";
 
 test("spec0001_e11_todo_ok", () => {
@@ -71,4 +71,11 @@ test("diseno_cifras_del_panel_de_inicio", () => {
       ["version", "1.2.0", "neutro"],
     ],
   );
+});
+
+test("diseno_tono_de_la_linea_de_estado", () => {
+  assert.equal(tonoSistema(null), "neutro");
+  assert.equal(tonoSistema({ api: "ok", postgres: "ok", mensaje: "" }), "permitir");
+  assert.equal(tonoSistema({ api: "ok", postgres: "caida", mensaje: "" }), "alerta");
+  assert.equal(tonoSistema({ api: "caida", postgres: "desconocido", mensaje: "" }), "bloquear");
 });

@@ -36,6 +36,7 @@
 
   font-family: var(--letra);
   line-height: 1.5;
+  scrollbar-color: var(--borde) transparent;
   background: var(--fondo);
   color: var(--texto);
 }
@@ -286,10 +287,6 @@ a {
   margin-top: 0;
 }
 
-.mensaje {
-  margin: 0.75rem 0 0;
-  color: var(--texto-suave);
-}
 
 .oculto {
   position: absolute;
@@ -1020,13 +1017,43 @@ button.negar:hover:not(:disabled) {
 
 /* ---------- Panel de inicio ---------- */
 
+/* Cinco módulos sin huecos: 3 arriba y 2 más anchos abajo; en dos columnas, el último ocupa la fila. */
 .panel-modulos {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0.75rem;
+}
+
+.panel-modulos > li {
+  grid-column: span 2;
+}
+
+.panel-modulos > li:nth-child(n + 4) {
+  grid-column: span 3;
+}
+
+@media (max-width: 64rem) {
+  .panel-modulos {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .panel-modulos > li,
+  .panel-modulos > li:nth-child(n + 4) {
+    grid-column: span 1;
+  }
+
+  .panel-modulos > li:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 36rem) {
+  .panel-modulos {
+    grid-template-columns: 1fr;
+  }
 }
 
 .panel-modulo {
@@ -1161,7 +1188,7 @@ button.negar:hover:not(:disabled) {
 }
 
 .json-clave { color: var(--marca); }
-.json-cadena { color: #a7f3d0; }
+.json-cadena { color: #e2e8f0; }
 .json-numero { color: #fbbf24; }
 .json-literal { color: #c4b5fd; }
 .json-puntuacion { color: var(--neutro); }

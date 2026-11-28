@@ -55,6 +55,14 @@ export function semaforoApi(respuesta: Respuesta): Semaforo {
   return respuesta.status === 200 ? "ok" : "desconocido";
 }
 
+/** El tono de la línea de estado: todo bien en verde, la base caída en ámbar (la API sigue
+ * sirviendo), la API caída en rojo y, mientras se comprueba, gris. */
+export function tonoSistema(estado: EstadoSistema | null): Tono {
+  if (estado === null) return "neutro";
+  if (estado.api !== "ok") return "bloquear";
+  return estado.postgres === "ok" ? "permitir" : "alerta";
+}
+
 const ETIQUETA: Record<Semaforo, string> = { ok: "En línea", caida: "Caído", desconocido: "Sin datos" };
 const TONO: Record<Semaforo, Tono> = { ok: "permitir", caida: "bloquear", desconocido: "neutro" };
 

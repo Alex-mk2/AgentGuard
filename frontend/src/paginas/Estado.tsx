@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { obtener } from "../api/cliente.ts";
 import { Cifras, Ficha, Icono, TituloPagina } from "../componentes.tsx";
-import { cifrasSistema, interpretarDependencias, interpretarVersion } from "../estado.ts";
+import { cifrasSistema, interpretarDependencias, interpretarVersion, tonoSistema } from "../estado.ts";
 import type { EstadoSistema } from "../estado.ts";
 import { MODULOS } from "../modulos.ts";
 import { paginaDe } from "../rutas.ts";
@@ -30,7 +30,16 @@ export function Estado() {
     <>
       <TituloPagina
         titulo="Estado del sistema"
-        bajada="AgentGuard se interpone entre el agente y el mundo: rompe la Tríada Letal en cada punto en vez de confiar en que el modelo se porte bien."
+        bajada={
+          <>
+            AgentGuard se interpone entre el agente y el mundo: rompe la Tríada Letal en cada punto en vez de confiar
+            en que el modelo se porte bien.
+            <span className={`linea-estado tono-${tonoSistema(estado)}`} role="status">
+              <span className="punto" aria-hidden="true" />
+              {estado?.mensaje ?? "Consultando la API…"}
+            </span>
+          </>
+        }
       >
         <button type="button" onClick={() => void comprobar()} disabled={estado === null}>
           {estado === null ? "Comprobando…" : "Comprobar de nuevo"}
@@ -38,9 +47,6 @@ export function Estado() {
       </TituloPagina>
 
       <Cifras cifras={cifrasSistema(estado, version)} etiqueta="Estado del sistema" />
-      <p className="mensaje" role="status">
-        {estado?.mensaje ?? "Consultando la API…"}
-      </p>
 
       <h2 className="rotulo">Módulos</h2>
       <ol className="panel-modulos">
